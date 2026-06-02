@@ -27,3 +27,17 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Python coverage
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+.env.*
+
+# Kubernetes
+kubeconfig
+
+# Mac/Linux
+*.swp
