@@ -1,0 +1,13 @@
+# Kind cluster configuration
+# Referenced for documentation — the cluster config is defined inline in main.tf
+# This file serves as a standalone reference for the cluster topology.
+#
+# To create the cluster manually (without Terraform):
+#   kind create cluster --name sre-platform --config kind-config.yaml
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+nodes:
+  - role: control-plane
+  - role: worker
