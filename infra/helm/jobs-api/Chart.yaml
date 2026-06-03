@@ -1,0 +1,6 @@
+apiVersion: v2
+name: jobs-api
+description: SRE Platform Demo — jobs-api Helm chart
+type: application
+version: 0.1.0
+appVersion: "local"
