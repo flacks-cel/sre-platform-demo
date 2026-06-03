@@ -1,3 +1,9 @@
+## Additional Documentation
+
+- [Project Overview](docs/project-overview.md)
+- [Architecture](docs/architecture.md)
+- [Project Status](docs/project-status.md)
+
 # SRE Platform Demo
 
 A production-inspired SRE platform demonstrating modern DevOps and Site Reliability Engineering practices using FastAPI, Docker, Prometheus, Grafana, Terraform, Kubernetes, and Helm.
