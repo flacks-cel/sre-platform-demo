@@ -1,35 +1,33 @@
 # SRE Platform Demo
 
-A hands-on platform engineering and SRE project designed to demonstrate modern DevOps practices including:
+A production-inspired SRE platform demonstrating modern DevOps and Site Reliability Engineering practices using FastAPI, Docker, Prometheus, Grafana, Terraform, Kubernetes, and Helm.
 
-- Terraform
-- Kubernetes (Kind)
-- Helm
-- GitHub Actions
-- Prometheus
-- Grafana
-- Loki
-- Trivy
-- FastAPI
+## Project Goals
 
-## Goals
+This project was created to demonstrate:
 
-This repository focuses on:
+- Infrastructure as Code (Terraform)
+- Containerization with Docker
+- Kubernetes orchestration
+- Observability with Prometheus and Grafana
+- CI/CD automation
+- SRE best practices
+- Health checks and readiness probes
+- Automated testing and code quality
 
-- Infrastructure as Code
-- CI/CD
-- Observability
-- Reliability Engineering
-- Kubernetes Operations
-- Incident Response
-- Rollback Strategies
+---
 
 ## Architecture
 
-See:
+```text
+FastAPI
+   ↓
+Prometheus
+   ↓
+Grafana
 
-docs/architecture.md
-
-## Project Status
-
-🚧 In Development
+Terraform
+   ↓
+Kind Kubernetes Cluster
+   ↓
+Helm Deployments
