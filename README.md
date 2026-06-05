@@ -37,3 +37,26 @@ Terraform
 Kind Kubernetes Cluster
    ↓
 Helm Deployments
+
+## Observability
+
+The platform includes a complete observability stack:
+
+- Prometheus for metrics collection
+- Grafana for visualization
+- Loki for centralized logging
+- Promtail for log shipping
+- ServiceMonitor for automatic Prometheus discovery
+
+### Custom Dashboard
+
+The `jobs-api-observability` dashboard provides:
+
+- Request Rate
+- Error Percentage
+- Jobs Created
+- Latency p99
+
+Dashboard definitions are versioned as code in:
+
+observability/grafana/dashboards/jobs-api-observability.json
