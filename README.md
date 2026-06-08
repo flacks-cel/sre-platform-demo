@@ -60,3 +60,11 @@ The `jobs-api-observability` dashboard provides:
 Dashboard definitions are versioned as code in:
 
 observability/grafana/dashboards/jobs-api-observability.json
+
+Grafana Dashboards
+
+- jobs-api-observability.json
+  Dashboard de métricas da aplicação
+
+- jobs-api-logs-only.json
+  Dashboard de logs da aplicação via Loki
