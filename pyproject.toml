@@ -7,5 +7,5 @@ select = ["E", "F", "I", "UP"]
 ignore = []
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
+testpaths = ["app/api/tests"]
+pythonpath = ["app/api"]
