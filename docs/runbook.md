@@ -379,3 +379,87 @@ terraform destroy
 | Alertmanager | http://localhost:9093 | — |
 | jobs-api | http://localhost:8000 | — |
 | API docs | http://localhost:8000/docs | — |
+
+---
+
+## 9. Instalar e operar o ArgoCD
+
+### 9.1 Instalar o ArgoCD
+
+```bash
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+
+helm install argocd argo/argo-cd \
+  --namespace argocd \
+  --create-namespace \
+  --set configs.params."server\.insecure"=true
+```
+
+Aguarda os pods subirem:
+
+```bash
+kubectl get pods -n argocd -w
+```
+
+### 9.2 Obter a senha do admin
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d
+```
+
+### 9.3 Acessar a UI
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:80
+```
+
+Acessa `http://localhost:8080` — usuário `admin`, senha do passo anterior.
+
+### 9.4 Criar a Application da jobs-api
+
+```bash
+kubectl apply -f infra/argocd/application.yaml
+```
+
+Valida:
+
+```bash
+kubectl get application -n argocd
+# NAME       SYNC STATUS   HEALTH STATUS
+# jobs-api   Synced        Healthy
+```
+
+### 9.5 Forçar sync manual
+
+```bash
+kubectl patch application jobs-api -n argocd \
+  --type merge \
+  -p '{"operation":{"initiatedBy":{"username":"admin"},"sync":{"revision":"HEAD"}}}'
+```
+
+Ou via UI: abre a aplicação e clica em **Sync**.
+
+### 9.6 Verificar status após mudança no Git
+
+Após qualquer `git push` para `main` com mudança em `infra/helm/jobs-api`, o ArgoCD detecta automaticamente e sincroniza. Verifica:
+
+```bash
+kubectl get application -n argocd
+```
+
+O campo `SYNC STATUS` muda para `OutOfSync` momentaneamente e volta para `Synced` após o deploy.
+
+### 9.7 Saúde esperada do ArgoCD
+
+| Recurso | Status esperado |
+|---|---|
+| argocd-application-controller | Running 1/1 |
+| argocd-applicationset-controller | Running 1/1 |
+| argocd-dex-server | Running 1/1 |
+| argocd-notifications-controller | Running 1/1 |
+| argocd-redis | Running 1/1 |
+| argocd-repo-server | Running 1/1 |
+| argocd-server | Running 1/1 |
+| Application jobs-api | Synced + Healthy |
