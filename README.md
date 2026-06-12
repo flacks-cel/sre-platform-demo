@@ -1,6 +1,9 @@
 # SRE Platform Demo
 
-A production-inspired SRE platform demonstrating modern DevOps and Site Reliability Engineering practices using FastAPI, Docker, Prometheus, Grafana, Loki, Promtail, Terraform, Kubernetes Kind, Helm and GitHub Actions.
+[![GitHub](https://img.shields.io/badge/GitHub-flacks--cel-black)](https://github.com/flacks-cel)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Flavio%20Lacks-blue)](https://www.linkedin.com/in/flaviolacks/)
+
+A production-inspired SRE platform demonstrating modern DevOps, GitOps and Site Reliability Engineering practices using FastAPI, Docker, Prometheus, Grafana, Loki, Promtail, Terraform, Kubernetes Kind, Helm, ArgoCD and GitHub Actions.
 
 ## Additional Documentation
 
@@ -17,6 +20,8 @@ This project was created to demonstrate:
 * Infrastructure as Code with Terraform
 * Containerization with Docker
 * Kubernetes orchestration using Kind
+* Helm-based application deployments
+* GitOps workflows using ArgoCD
 * Observability with Prometheus, Grafana, Loki and Promtail
 * Metrics collection and dashboard visualization
 * Centralized application logging
@@ -30,26 +35,57 @@ This project was created to demonstrate:
 ## Architecture
 
 ```text
-FastAPI Jobs API
-   ↓
-Prometheus Metrics
-   ↓
-Grafana Dashboards
+GitHub Repository
+        ↓
+     ArgoCD
+        ↓
+ Helm Deployments
+        ↓
+Kind Kubernetes Cluster
+        ↓
+   FastAPI Jobs API
+
+Application Metrics
+        ↓
+   Prometheus
+        ↓
+    Grafana
 
 Application Logs
-   ↓
-Promtail
-   ↓
-Loki
-   ↓
-Grafana Logs Panel
+        ↓
+    Promtail
+        ↓
+      Loki
+        ↓
+    Grafana
 
 Terraform
-   ↓
-Kind Kubernetes Cluster
-   ↓
-Helm Deployments
+        ↓
+Infrastructure Provisioning
 ```
+
+---
+
+## GitOps with ArgoCD
+
+This project implements GitOps practices using ArgoCD to continuously synchronize the Kubernetes cluster with the desired state stored in Git.
+
+The application is deployed through a Helm chart managed by ArgoCD, providing automated synchronization, continuous reconciliation and self-healing capabilities.
+
+### ArgoCD Application
+
+![ArgoCD Application](docs/images/argocd-application-tree.png)
+
+Features:
+
+* GitOps deployment model
+* Continuous reconciliation
+* Automatic synchronization
+* Helm-based deployments
+* Self-healing Kubernetes workloads
+* Horizontal Pod Autoscaler (HPA) management
+
+The application source is stored in this repository and synchronized automatically by ArgoCD.
 
 ---
 
@@ -110,19 +146,19 @@ Dashboard for application logs using Loki.
 
 ### Start the Environment
 
-The environment can be started locally using Docker Compose and the observability stack.
+Start the local environment:
 
 ```bash
 docker compose up -d --build
 ```
 
-For the full local demo environment, use the local startup script if available in your workstation:
+For the complete local demo environment:
 
 ```bash
 ./local/start-demo.sh
 ```
 
-The local script is intentionally not versioned in Git because it contains machine-specific startup automation and port-forward commands.
+The local startup script provisions infrastructure, configures observability, installs Loki, Promtail and prepares demo data automatically.
 
 ---
 
@@ -134,6 +170,7 @@ The local script is intentionally not versioned in Git because it contains machi
 | Prometheus | http://localhost:9090 |
 | API        | http://localhost:8000 |
 | Loki       | http://localhost:3102 |
+| ArgoCD     | http://localhost:8080 |
 
 ---
 
@@ -162,19 +199,19 @@ curl -X POST http://localhost:8000/jobs \
 
 Prometheus scrapes metrics from the `jobs-api` service.
 
-The scrape configuration is located at:
+Configuration:
 
 ```text
 observability/prometheus/prometheus.yml
 ```
 
-The `jobs-api` target can be validated at:
+Targets page:
 
 ```text
 http://localhost:9090/targets
 ```
 
-Expected target status:
+Expected status:
 
 ```text
 jobs-api UP
@@ -190,7 +227,7 @@ Grafana dashboards rely on Prometheus metrics labeled with:
 namespace: app
 ```
 
-The Prometheus scrape configuration injects this label into the `jobs-api` target:
+Prometheus injects this label into the scrape target:
 
 ```yaml
 static_configs:
@@ -225,7 +262,9 @@ Grafana accesses Loki using:
 http://host.docker.internal:3102
 ```
 
-The logs dashboard displays application events such as:
+This URL is required because Grafana runs inside Docker while Loki is exposed through a Kubernetes port-forward.
+
+The logs dashboard displays:
 
 * Health check requests
 * Readiness check requests
@@ -235,17 +274,40 @@ The logs dashboard displays application events such as:
 
 ---
 
+## ArgoCD Deployment
+
+ArgoCD monitors this repository and continuously reconciles the cluster state.
+
+Application source:
+
+```text
+Repository:
+https://github.com/flacks-cel/sre-platform-demo
+
+Path:
+infra/helm/jobs-api
+```
+
+ArgoCD capabilities demonstrated:
+
+* Continuous synchronization
+* Drift detection
+* Self-healing deployments
+* Declarative Kubernetes management
+* Helm integration
+* GitOps workflows
+
+---
+
 ## Demo Data Generation
 
-The local demo script generates sample observability data automatically, including:
+The local demo script automatically generates:
 
 * HTTP request traffic
 * Job creation events
 * Error simulation
 * Latency simulation
 * Application logs
-
-This ensures that the Grafana dashboard is populated immediately after startup.
 
 Useful manual commands:
 
@@ -278,6 +340,7 @@ curl "http://localhost:8000/simulate/latency?seconds=1"
 * Terraform
 * Kubernetes Kind
 * Helm
+* ArgoCD
 * Prometheus
 * Grafana
 * Loki
@@ -293,7 +356,12 @@ curl "http://localhost:8000/simulate/latency?seconds=1"
 ├── .github/workflows
 ├── app/api
 ├── docs
+│   └── images
+│       ├── grafana-dashboard.png
+│       └── argocd-application-tree.png
 ├── infra
+│   ├── helm
+│   └── terraform
 ├── observability
 │   ├── grafana
 │   └── prometheus
@@ -314,7 +382,7 @@ The project includes GitHub Actions workflows for:
 * Code quality checks
 * Container workflow preparation
 
-Workflow files are located in:
+Workflow files:
 
 ```text
 .github/workflows/
@@ -322,10 +390,15 @@ Workflow files are located in:
 
 ---
 
-## SRE Concepts Demonstrated
+## SRE and DevOps Concepts Demonstrated
 
-This project demonstrates practical SRE and DevOps concepts:
+This project demonstrates practical SRE, DevOps and Platform Engineering concepts:
 
+* Infrastructure as Code
+* GitOps workflows
+* Continuous reconciliation
+* Declarative Kubernetes deployments
+* Helm-based application delivery
 * Service health checks
 * Readiness probes
 * Metrics-based monitoring
@@ -336,9 +409,19 @@ This project demonstrates practical SRE and DevOps concepts:
 * Infrastructure automation
 * Local Kubernetes experimentation
 * Troubleshooting using Prometheus, Grafana and Loki
+* Self-healing application deployment patterns
 
 ---
 
 ## License
 
-This project is intended for educational and portfolio purposes.
+This project is intended for educational, learning and portfolio purposes.
+
+## About the Author
+
+This project was designed and implemented by Flavio Lacks as a practical demonstration of DevOps, GitOps, Observability and Site Reliability Engineering practices.
+
+For professional contact:
+
+- LinkedIn: https://www.linkedin.com/in/flaviolacks/
+- GitHub: https://github.com/flacks-cel
