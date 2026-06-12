@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jobs-api
+  namespace: argocd
+  labels:
+    project: sre-platform-demo
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/flacks-cel/sre-platform-demo
+    targetRevision: HEAD
+    path: infra/helm/jobs-api
+    helm:
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: serviceMonitor.enabled
+          value: "true"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: app
+
+  syncPolicy:
+    automated:
+      prune: true      # remove recursos que não estão mais no Git
+      selfHeal: true   # reverte mudanças manuais no cluster
+    syncOptions:
+      - CreateNamespace=false  # namespace já existe via Terraform
