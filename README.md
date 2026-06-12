@@ -74,7 +74,7 @@ The application is deployed through a Helm chart managed by ArgoCD, providing au
 
 ### ArgoCD Application
 
-![ArgoCD Application](docs/images/argocd-application-tree.png)
+![ArgoCD Application](docs/images/argocd-dashboard.png)
 
 Features:
 
