@@ -41,3 +41,4 @@ kubeconfig
 
 # Mac/Linux
 *.swp
+.vs/
