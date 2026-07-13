@@ -91,9 +91,9 @@ echo "Deployment:  ${NAMESPACE}/${DEPLOYMENT}"
 echo
 echo "Para validar pelo Service Kubernetes:"
 echo
-echo "  kubectl port-forward -n ${NAMESPACE} svc/${DEPLOYMENT} 8080:8000"
+echo "  kubectl port-forward -n ${NAMESPACE} svc/${DEPLOYMENT} 8081:8000"
 echo
 echo "Em outro terminal:"
 echo
-echo "  curl \"http://localhost:8080/simulate/cpu?seconds=2\""
+echo "  curl \"http://localhost:8081/simulate/cpu?seconds=2\""
 echo "=========================================================="
