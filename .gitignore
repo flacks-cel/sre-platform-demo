@@ -42,3 +42,12 @@ kubeconfig
 # Mac/Linux
 *.swp
 .vs/
+
+# Local runtime state
+.runtime/
+
+# Grafana exports created during local editing
+*-observability-[0-9]*.json
+
+# Local script backups
+*.backup
