@@ -23,9 +23,21 @@ spec:
     server: https://kubernetes.default.svc
     namespace: app
 
+
+  # The HPA owns the live replica count. Ignore this field so ArgoCD
+  # does not report drift when autoscaling changes Deployment replicas.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: jobs-api
+      namespace: app
+      jsonPointers:
+        - /spec/replicas
+
   syncPolicy:
     automated:
       prune: true      # remove recursos que não estão mais no Git
       selfHeal: true   # reverte mudanças manuais no cluster
     syncOptions:
       - CreateNamespace=false  # namespace já existe via Terraform
+      - RespectIgnoreDifferences=true
