@@ -117,8 +117,7 @@ The platform simulates a production-inspired SRE environment running locally on 
 <p align="center">
     <img src="docs/images/architecture.png" width="100%">
 </p>
-
----
+</div>
 
 ### Components
 
