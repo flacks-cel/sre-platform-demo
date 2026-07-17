@@ -47,9 +47,9 @@
 
 # 🎬 Live Demo
 
-Watch the complete demonstration of the SRE Platform Demo.
+Watch the complete demonstration of the **SRE Platform Demo**.
 
-The video presents the full platform workflow, including:
+This walkthrough showcases the complete platform workflow, including:
 
 - 🚀 One-command platform startup
 - ☸️ Kubernetes cluster provisioning
@@ -61,7 +61,17 @@ The video presents the full platform workflow, including:
 - 📖 FastAPI Swagger API
 - 📈 Real-time autoscaling demonstration
 
-▶ **[Watch the Full Demo](docs/images/videos/sre-platform-demo.mp4)**
+<p align="center">
+
+## ▶️ Watch the Full Demo
+
+https://youtu.be/lmrJW9o-V2E
+
+</p>
+
+---
+
+> **Source code:** https://github.com/flacks-cel/sre-platform-demo
 
 ---
 
