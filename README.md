@@ -1,427 +1,368 @@
-# SRE Platform Demo
+# 🚀 SRE Platform Demo
 
-[![GitHub](https://img.shields.io/badge/GitHub-flacks--cel-black)](https://github.com/flacks-cel)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Flavio%20Lacks-blue)](https://www.linkedin.com/in/flaviolacks/)
+<p align="center">
+  <img src="docs/images/banner.png" alt="SRE Platform Demo" width="100%">
+</p>
 
-A production-inspired SRE platform demonstrating modern DevOps, GitOps and Site Reliability Engineering practices using FastAPI, Docker, Prometheus, Grafana, Loki, Promtail, Terraform, Kubernetes Kind, Helm, ArgoCD and GitHub Actions.
+> **A production-inspired local Platform Engineering environment designed to demonstrate modern Site Reliability Engineering practices end-to-end.**
 
-## Additional Documentation
+<p align="center">
 
-* [Project Overview](docs/project-overview.md)
-* [Architecture](docs/architecture.md)
-* [Project Status](docs/project-status.md)
+<img alt="License" src="https://img.shields.io/github/license/flacks-cel/sre-platform-demo">
+<img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-v1.35-blue">
+<img alt="Terraform" src="https://img.shields.io/badge/Terraform-IaC-623CE4">
+<img alt="Helm" src="https://img.shields.io/badge/Helm-v3-0F1689">
+<img alt="ArgoCD" src="https://img.shields.io/badge/GitOps-ArgoCD-EF7B4D">
+<img alt="Prometheus" src="https://img.shields.io/badge/Prometheus-Metrics-E6522C">
+<img alt="Grafana" src="https://img.shields.io/badge/Grafana-Dashboards-F46800">
+<img alt="Loki" src="https://img.shields.io/badge/Loki-Logs-2F4054">
+<img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Python-009688">
+<img alt="k6" src="https://img.shields.io/badge/k6-Load%20Testing-7D64FF">
 
----
-
-## Project Goals
-
-This project was created to demonstrate:
-
-* Infrastructure as Code with Terraform
-* Containerization with Docker
-* Kubernetes orchestration using Kind
-* Helm-based application deployments
-* GitOps workflows using ArgoCD
-* Observability with Prometheus, Grafana, Loki and Promtail
-* Metrics collection and dashboard visualization
-* Centralized application logging
-* CI/CD automation with GitHub Actions
-* Health checks and readiness probes
-* Automated testing and code quality
-* SRE-oriented troubleshooting and operational visibility
+</p>
 
 ---
 
-## Architecture
+## 🚀 Production-inspired Platform Engineering Showcase
 
-```text
-GitHub Repository
-        ↓
-     ArgoCD
-        ↓
- Helm Deployments
-        ↓
-Kind Kubernetes Cluster
-        ↓
-   FastAPI Jobs API
-
-Application Metrics
-        ↓
-   Prometheus
-        ↓
-    Grafana
-
-Application Logs
-        ↓
-    Promtail
-        ↓
-      Loki
-        ↓
-    Grafana
-
-Terraform
-        ↓
-Infrastructure Provisioning
-```
+> This project demonstrates how modern Site Reliability Engineering practices can be implemented locally using Kubernetes, GitOps, Infrastructure as Code, Observability, Horizontal Pod Autoscaling and Performance Testing.
 
 ---
 
-## GitOps with ArgoCD
+## 📑 Table of Contents
 
-This project implements GitOps practices using ArgoCD to continuously synchronize the Kubernetes cluster with the desired state stored in Git.
-
-The application is deployed through a Helm chart managed by ArgoCD, providing automated synchronization, continuous reconciliation and self-healing capabilities.
-
-### ArgoCD Application
-
-![ArgoCD Application](docs/images/argocd-dashboard.png)
-
-Features:
-
-* GitOps deployment model
-* Continuous reconciliation
-* Automatic synchronization
-* Helm-based deployments
-* Self-healing Kubernetes workloads
-* Horizontal Pod Autoscaler (HPA) management
-
-The application source is stored in this repository and synchronized automatically by ArgoCD.
+- [🚀 Live Demo](#-live-demo)
+- [🏗️ Architecture](#️-architecture)
+- [✨ Features](#-features)
+- [🛠️ Technology Stack](#️-technology-stack)
+- [🚀 Quick Start](#-quick-start)
+- [📊 Observability](#-observability)
+- [⚡ HPA & Load Testing](#-hpa--load-testing)
+- [📂 Project Structure](#-project-structure)
+- [📸 Screenshots](#-screenshots)
+- [👤 About the Author](#-about-the-author)
+- [📄 License](#-license)
 
 ---
 
-## Dashboard Preview
+# 🎬 Live Demo
 
-![Grafana Dashboard](docs/images/grafana-dashboard.png)
+Watch the complete demonstration of the SRE Platform Demo.
 
-The Grafana dashboard provides visibility into:
+The video presents the full platform workflow, including:
 
-* Request Rate
-* Error Percentage
-* Jobs Created
-* Latency p99
-* Application Logs
+- 🚀 One-command platform startup
+- ☸️ Kubernetes cluster provisioning
+- 🔄 GitOps with ArgoCD
+- 📊 Observability with Prometheus and Grafana
+- 📜 Centralized logging with Loki
+- ⚡ Horizontal Pod Autoscaler (HPA)
+- 🔥 k6 Load Testing
+- 📖 FastAPI Swagger API
+- 📈 Real-time autoscaling demonstration
 
----
-
-## Observability
-
-The platform includes a complete observability stack:
-
-* Prometheus for metrics collection
-* Grafana for visualization
-* Loki for centralized logging
-* Promtail for log shipping
-* Custom Grafana dashboards for application metrics and logs
-
-### Custom Dashboards
-
-Dashboard definitions are versioned as code in:
-
-```text
-observability/grafana/dashboards/
-```
-
-Available dashboards:
-
-```text
-jobs-api-observability.json
-```
-
-Dashboard for application metrics:
-
-* Request Rate
-* Error Percentage
-* Jobs Created
-* Latency p99
-
-```text
-jobs-api-logs-only.json
-```
-
-Dashboard for application logs using Loki.
+▶ **[Watch the Full Demo](docs/images/videos/sre-platform-demo.mp4)**
 
 ---
 
-## Quick Start
+> **Tip:** If GitHub does not play the video directly in your browser, click **Download** to watch it locally.
 
-### Start the Environment
+## 💡 Why this project?
 
-Start the local environment:
+Modern Site Reliability Engineers are expected to build far more than Kubernetes clusters.
+
+They automate infrastructure, deploy applications through GitOps, monitor production systems, implement observability, troubleshoot incidents and validate scalability using performance testing.
+
+This repository demonstrates those capabilities through a fully reproducible local Platform Engineering environment.
+
+Everything can be started using a single command:
 
 ```bash
-docker compose up -d --build
+./demo.sh
 ```
 
-For the complete local demo environment:
+---
+
+# ✨ Features
+
+- 🚀 One-command platform startup
+- ☸️ Kubernetes (Kind)
+- 🌍 Infrastructure as Code (Terraform)
+- 📦 Helm deployments
+- 🔄 GitOps with ArgoCD
+- 📈 Prometheus monitoring
+- 📊 Grafana dashboards
+- 📜 Centralized logging with Loki
+- ⚡ Horizontal Pod Autoscaler (HPA)
+- 🔥 Integrated k6 Load Testing
+- 🐍 FastAPI demo application
+- 📖 Interactive Swagger documentation
+
+---
+
+## 🏗️ Architecture
+
+The platform simulates a production-inspired SRE environment running locally on Kubernetes (Kind). It combines GitOps, Infrastructure as Code, Observability and Autoscaling into a single reproducible platform.
+
+<p align="center">
+    <img src="docs/images/architecture.png" width="100%">
+</p>
+
+### Components
+
+| Component | Purpose |
+|-----------|---------|
+| Terraform | Provision the local infrastructure |
+| Helm | Deploy and manage Kubernetes applications |
+| ArgoCD | GitOps continuous delivery |
+| FastAPI | Demo application exposing metrics and simulation endpoints |
+| Prometheus | Metrics collection and storage |
+| Grafana | Dashboards and visualization |
+| Loki | Centralized log aggregation |
+| Promtail | Log collection from Kubernetes |
+| Metrics Server | Kubernetes resource metrics |
+| HPA | Horizontal Pod Autoscaler |
+| k6 | Load, smoke and stress testing |
+
+# 🧰 Technology Stack
+
+| Category | Technology |
+|------------|------------|
+| Container Orchestration | Kubernetes (Kind) |
+| Infrastructure as Code | Terraform |
+| Package Management | Helm |
+| GitOps | ArgoCD |
+| Monitoring | Prometheus |
+| Dashboards | Grafana |
+| Logging | Loki + Promtail |
+| Autoscaling | Horizontal Pod Autoscaler |
+| Load Testing | Grafana k6 |
+| API | FastAPI |
+| Language | Python |
+
+
+---
+
+## 📸 Screenshots
+
+### Main Dashboard
+
+<p align="center">
+    <img src="docs/images/grafana-overview.png" width="100%">
+</p>
+
+The executive dashboard provides a high-level view of request rate, latency, error percentage, logs and application activity.
+
+---
+
+### HPA Dashboard
+
+<p align="center">
+    <img src="docs/images/grafana-hpa.png" width="100%">
+</p>
+
+This dashboard demonstrates Horizontal Pod Autoscaler behavior during load tests executed with k6.
+
+---
+
+### GitOps with ArgoCD
+
+<p align="center">
+    <img src="docs/images/argocd.png" width="100%">
+</p>
+
+ArgoCD continuously synchronizes Kubernetes resources directly from Git.
+
+---
+
+### API Documentation
+
+<p align="center">
+    <img src="docs/images/swagger.png" width="100%">
+</p>
+
+The demo application exposes a complete OpenAPI/Swagger interface.
+
+---
+
+### Interactive Demo Menu
+
+<p align="center">
+    <img src="docs/images/demo-menu.png" width="100%">
+</p>
+
+The entire environment can be controlled through a single interactive Bash launcher.
+
+
+---
+
+# 📋 Requirements
+
+Before running the project, make sure the following tools are installed:
+
+- Docker Desktop
+- Git
+- kubectl
+- Kind
+- Helm
+- Terraform
+
+---
+
+# 🚀 Quick Start
+
+Clone the repository:
 
 ```bash
-./local/start-demo.sh
+git clone https://github.com/flacks-cel/sre-platform-demo
+
+cd sre-platform-demo
 ```
 
-The local startup script provisions infrastructure, configures observability, installs Loki, Promtail and prepares demo data automatically.
-
----
-
-## Access URLs
-
-| Component  | URL                   |
-| ---------- | --------------------- |
-| Grafana    | http://localhost:3000 |
-| Prometheus | http://localhost:9090 |
-| API        | http://localhost:8000 |
-| Loki       | http://localhost:3102 |
-| ArgoCD     | http://localhost:8080 |
-
----
-
-## Application Endpoints
-
-| Endpoint                      | Description                   |
-| ----------------------------- | ----------------------------- |
-| `/health`                     | Health check endpoint         |
-| `/ready`                      | Readiness check endpoint      |
-| `/metrics`                    | Prometheus metrics endpoint   |
-| `/jobs`                       | Job creation endpoint         |
-| `/simulate/error`             | Simulates application errors  |
-| `/simulate/latency?seconds=1` | Simulates application latency |
-
-Example job creation:
+Start the entire platform:
 
 ```bash
-curl -X POST http://localhost:8000/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"name":"demo-job","payload":{"source":"interview-demo"}}'
+./demo.sh
 ```
+
+The launcher automatically:
+
+- Creates the Kubernetes cluster
+- Deploys the application
+- Configures Grafana
+- Configures Prometheus
+- Configures Loki
+- Configures ArgoCD
+- Starts port-forwards
+- Opens dashboards
+- Runs platform checks
 
 ---
 
-## Prometheus
-
-Prometheus scrapes metrics from the `jobs-api` service.
-
-Configuration:
+# 🎯 Demonstration Flow
 
 ```text
-observability/prometheus/prometheus.yml
-```
+demo.sh
 
-Targets page:
+↓
 
-```text
-http://localhost:9090/targets
-```
+Start Platform
 
-Expected status:
+↓
 
-```text
-jobs-api UP
-```
+Open Grafana
 
----
+↓
 
-## Observability Notes
+Observe Metrics
 
-Grafana dashboards rely on Prometheus metrics labeled with:
+↓
 
-```yaml
-namespace: app
-```
+Observe Logs
 
-Prometheus injects this label into the scrape target:
+↓
 
-```yaml
-static_configs:
-  - targets: ["jobs-api:8000"]
-    labels:
-      namespace: "app"
-```
+Run HPA Test
 
-Several dashboard panels use PromQL filters such as:
+↓
 
-```promql
-http_requests_total{namespace="app"}
-```
+Watch Autoscaling
 
-and:
+↓
 
-```promql
-http_request_duration_seconds_bucket{namespace="app"}
-```
+Validate GitOps
 
-If this label is removed or renamed, Grafana panels may display **No Data** even when Prometheus is successfully scraping metrics.
+↓
 
----
-
-## Loki and Application Logs
-
-Application logs are collected by Promtail and sent to Loki.
-
-Grafana accesses Loki using:
-
-```text
-http://host.docker.internal:3102
-```
-
-This URL is required because Grafana runs inside Docker while Loki is exposed through a Kubernetes port-forward.
-
-The logs dashboard displays:
-
-* Health check requests
-* Readiness check requests
-* Job creation events
-* Simulated errors
-* Latency simulation requests
-
----
-
-## ArgoCD Deployment
-
-ArgoCD monitors this repository and continuously reconciles the cluster state.
-
-Application source:
-
-```text
-Repository:
-https://github.com/flacks-cel/sre-platform-demo
-
-Path:
-infra/helm/jobs-api
-```
-
-ArgoCD capabilities demonstrated:
-
-* Continuous synchronization
-* Drift detection
-* Self-healing deployments
-* Declarative Kubernetes management
-* Helm integration
-* GitOps workflows
-
----
-
-## Demo Data Generation
-
-The local demo script automatically generates:
-
-* HTTP request traffic
-* Job creation events
-* Error simulation
-* Latency simulation
-* Application logs
-
-Useful manual commands:
-
-```bash
-for i in {1..20}; do curl http://localhost:8000/health; done
-```
-
-```bash
-curl -X POST http://localhost:8000/jobs \
-  -H "Content-Type: application/json" \
-  -d '{"name":"demo-job","payload":{"source":"manual-test"}}'
-```
-
-```bash
-curl http://localhost:8000/simulate/error
-```
-
-```bash
-curl "http://localhost:8000/simulate/latency?seconds=1"
+Done
 ```
 
 ---
 
-## Technology Stack
-
-* FastAPI
-* Python
-* Docker
-* Docker Compose
-* Terraform
-* Kubernetes Kind
-* Helm
-* ArgoCD
-* Prometheus
-* Grafana
-* Loki
-* Promtail
-* GitHub Actions
-
----
-
-## Repository Structure
+# 📁 Repository Structure
 
 ```text
 .
-├── .github/workflows
-├── app/api
-├── docs
-│   └── images
-│       ├── grafana-dashboard.png
-│       └── argocd-application-tree.png
-├── infra
-│   ├── helm
-│   └── terraform
-├── observability
-│   ├── grafana
-│   └── prometheus
-├── Dockerfile
-├── docker-compose.yml
-├── pyproject.toml
-└── README.md
+├── app/
+├── infra/
+├── load-testing/
+├── local/
+├── observability/
+├── docs/
+│   ├── images/
+│   └── videos/
+├── demo.sh
+├── README.md
+└── LICENSE
 ```
 
 ---
 
-## CI/CD
+# 🎯 What this project demonstrates
 
-The project includes GitHub Actions workflows for:
+This project showcases practical experience with:
 
-* Automated validation
-* Testing
-* Code quality checks
-* Container workflow preparation
-
-Workflow files:
-
-```text
-.github/workflows/
-```
-
----
-
-## SRE and DevOps Concepts Demonstrated
-
-This project demonstrates practical SRE, DevOps and Platform Engineering concepts:
-
-* Infrastructure as Code
-* GitOps workflows
-* Continuous reconciliation
-* Declarative Kubernetes deployments
-* Helm-based application delivery
-* Service health checks
-* Readiness probes
-* Metrics-based monitoring
-* Centralized logging
-* Dashboard-driven observability
-* Error rate tracking
-* Latency percentile tracking
-* Infrastructure automation
-* Local Kubernetes experimentation
-* Troubleshooting using Prometheus, Grafana and Loki
-* Self-healing application deployment patterns
+- Platform Engineering
+- Site Reliability Engineering
+- Infrastructure as Code
+- GitOps
+- Kubernetes
+- Observability
+- Monitoring
+- Centralized Logging
+- Autoscaling
+- Performance Testing
+- Automation
+- Production-like troubleshooting
+- GitOps operational workflow
 
 ---
 
-## License
+# 🛣 Roadmap
 
-This project is intended for educational, learning and portfolio purposes.
+- ✅ Kubernetes Platform
+- ✅ Terraform
+- ✅ Helm
+- ✅ GitOps
+- ✅ Prometheus
+- ✅ Grafana
+- ✅ Loki
+- ✅ HPA
+- ✅ k6
+- ✅ Interactive Demo Launcher
+- ⏳ Demo GIF
+- ✅ Demonstration Video
 
-## About the Author
+---
 
-This project was designed and implemented by Flavio Lacks as a practical demonstration of DevOps, GitOps, Observability and Site Reliability Engineering practices.
+# 👨‍💻 About the Author
 
-For professional contact:
+## Flavio Lacks
 
-- LinkedIn: https://www.linkedin.com/in/flaviolacks/
-- GitHub: https://github.com/flacks-cel
+**Senior Site Reliability Engineer | Platform Engineer | DevOps Engineer**
+
+Passionate about Platform Engineering, Kubernetes, Cloud Infrastructure, Observability and Automation.
+
+This project was designed and implemented to simulate a production-inspired SRE platform, demonstrating Infrastructure as Code, GitOps, Observability, Horizontal Pod Autoscaling, Performance Testing and operational excellence in a fully reproducible local Kubernetes environment.
+
+- 💼 LinkedIn  
+  https://www.linkedin.com/in/flaviolacks/
+
+- 💻 GitHub  
+  https://github.com/flacks-cel
+
+---
+
+# 📄 License
+
+This project is licensed under the **MIT License**.
+
+See the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+
+© 2026 Flavio Lacks
+
+</p>

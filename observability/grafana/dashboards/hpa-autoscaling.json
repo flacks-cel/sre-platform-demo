@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Observability dashboard for jobs-api including request rate, error percentage, latency p99, business metrics and application logs.",
+  "description": "Horizontal Pod Autoscaler demonstration with Kubernetes, Prometheus and Grafana.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -29,39 +29,9 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -70,32 +40,43 @@
                 "value": 0
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "semi-dark-green",
+                "value": 1
+              },
+              {
+                "color": "#EAB839",
+                "value": 3
+              },
+              {
+                "color": "semi-dark-red",
+                "value": 5
               }
             ]
-          }
+          },
+          "unit": "none"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 0
       },
       "id": 1,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "textMode": "auto"
       },
       "targets": [
         {
@@ -104,14 +85,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_requests_total{namespace=\"app\"}[1m]))",
-          "legendFormat": "__auto",
+          "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"app\",horizontalpodautoscaler=\"jobs-api\"}",
+          "legendFormat": "Current",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Request Rate",
-      "type": "timeseries"
+      "title": "Current Replicas",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -123,6 +104,7 @@
           "color": {
             "mode": "thresholds"
           },
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -131,18 +113,27 @@
                 "value": 0
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "semi-dark-green",
+                "value": 1
+              },
+              {
+                "color": "#EAB839",
+                "value": 3
+              },
+              {
+                "color": "semi-dark-red",
+                "value": 5
               }
             ]
-          }
+          },
+          "unit": "none"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 8,
         "y": 0
       },
       "id": 2,
@@ -167,13 +158,82 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(jobs_created_total)",
-          "legendFormat": "__auto",
+          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"app\",horizontalpodautoscaler=\"jobs-api\"}",
+          "legendFormat": "Desired",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Jobs Created",
+      "title": "Desired Replicas",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "#EAB839",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 4
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "kube_deployment_status_replicas{namespace=\"app\",deployment=\"jobs-api\"}",
+          "legendFormat": "Deployment",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Deployment Replicas",
       "type": "stat"
     },
     {
@@ -217,23 +277,7 @@
               "mode": "off"
             }
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "percent",
-          "decimals": 2,
-          "min": 0,
-          "max": 100
+          "unit": "cores"
         },
         "overrides": []
       },
@@ -243,13 +287,13 @@
         "x": 0,
         "y": 8
       },
-      "id": 3,
+      "id": 4,
       "options": {
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "single",
@@ -263,13 +307,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(\n  100 *\n  sum(rate(http_requests_total{namespace=\"app\",status=~\"5..\"}[5m]))\n  /\n  clamp_min(\n    sum(rate(http_requests_total{namespace=\"app\"}[5m])),\n    0.001\n  )\n)\nor vector(0)",
-          "legendFormat": "5xx Error Rate",
+          "expr": "rate(\n  container_cpu_usage_seconds_total{\n    namespace=\"app\",\n    pod=~\"jobs-api-.*\",\n    container=\"jobs-api\"\n  }[1m]\n)\n*\non(namespace,pod)\ngroup_left()\n(\n  kube_pod_status_phase{\n    namespace=\"app\",\n    phase=\"Running\"\n  } == 1\n)",
+          "legendFormat": "{{pod}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Error Percentage",
+      "title": "CPU Usage by Pod",
       "type": "timeseries"
     },
     {
@@ -312,19 +356,6 @@
             "thresholdsStyle": {
               "mode": "off"
             }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
           }
         },
         "overrides": []
@@ -335,7 +366,7 @@
         "x": 12,
         "y": 8
       },
-      "id": 4,
+      "id": 5,
       "options": {
         "legend": {
           "calcs": [],
@@ -355,75 +386,57 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(\n  0.99,\n  sum(\n    rate(\n      http_request_duration_seconds_bucket{\n        namespace=\"app\",\n        handler!=\"/health\",\n        handler!=\"/ready\"\n      }[1m]\n    )\n  ) by (le)\n)",
-          "legendFormat": "__auto",
+          "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"app\",horizontalpodautoscaler=\"jobs-api\"}",
+          "legendFormat": "Current",
           "range": true,
           "refId": "A"
-        }
-      ],
-      "title": "Latency p99",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 16
-      },
-      "id": 5,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": false,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "targets": [
+        },
         {
           "datasource": {
-            "type": "loki",
-            "uid": "loki"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "{namespace=\"app\"}",
-          "queryType": "range",
-          "refId": "A"
+          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"app\",horizontalpodautoscaler=\"jobs-api\"}",
+          "legendFormat": "Desired",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "kube_deployment_status_replicas{namespace=\"app\",deployment=\"jobs-api\"}",
+          "legendFormat": "Deployment",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "Application Logs",
-      "type": "logs"
+      "title": "HPA Scaling Timeline",
+      "type": "timeseries"
     }
   ],
   "preload": false,
-  "refresh": "",
+  "refresh": "5s",
   "schemaVersion": 40,
   "tags": [
     "sre",
-    "jobs-api"
+    "hpa",
+    "autoscaling"
   ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-30m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "SRE Platform Demo",
-  "uid": "jobs-api-observability",
+  "title": "SRE Platform Demo - HPA Autoscaling",
+  "uid": "sre-platform-demo-hpa",
   "version": 1,
   "weekStart": ""
 }

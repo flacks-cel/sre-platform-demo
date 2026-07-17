@@ -1,65 +1,135 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-ARGOCD_NS="argocd"
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+ARGOCD_NS="${ARGOCD_NS:-argocd}"
+APPLICATION_FILE="${PROJECT_ROOT}/infra/argocd/application.yaml"
+APPLICATION_NAME="${APPLICATION_NAME:-jobs-api}"
+
+cd "${PROJECT_ROOT}"
 
 echo "================================================="
-echo "ARGOCD - INSTALACAO"
+echo "ARGOCD - INSTALAÇÃO"
 echo "================================================="
 
-echo "==> Verificando cluster..."
-kubectl cluster-info >/dev/null
+require_command kubectl
+require_command helm
+require_file "${APPLICATION_FILE}"
 
-echo "==> Adicionando repo Helm..."
-helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
+wait_for_kubernetes_api
+
+log "Configurando repositório Helm"
+
+helm repo add argo \
+  https://argoproj.github.io/argo-helm \
+  >/dev/null 2>&1 || true
+
 helm repo update >/dev/null
 
-echo "==> Instalando ArgoCD..."
-if helm status argocd -n "$ARGOCD_NS" &>/dev/null; then
-  echo "ArgoCD já instalado."
-else
-  helm install argocd argo/argo-cd \
-    --namespace "$ARGOCD_NS" \
-    --create-namespace \
-    --set configs.params."server\.insecure"=true \
-    --wait --timeout 5m
-fi
+log "Instalando ou atualizando ArgoCD"
 
-echo "==> Aguardando pods..."
-kubectl wait --for=condition=ready pod \
-  -l app.kubernetes.io/name=argocd-server \
-  -n "$ARGOCD_NS" --timeout=120s
+helm upgrade --install argocd argo/argo-cd \
+  --namespace "${ARGOCD_NS}" \
+  --create-namespace \
+  --set configs.params."server\.insecure"=true \
+  --timeout 10m
 
-echo "==> Aplicando Application jobs-api..."
-kubectl apply -f infra/argocd/application.yaml
+log "Aguardando componentes do ArgoCD"
 
-echo "==> Aguardando sync..."
-for i in {1..30}; do
-  STATUS=$(kubectl get application jobs-api -n "$ARGOCD_NS" \
-    -o jsonpath='{.status.sync.status}' 2>/dev/null || echo "Unknown")
-  HEALTH=$(kubectl get application jobs-api -n "$ARGOCD_NS" \
-    -o jsonpath='{.status.health.status}' 2>/dev/null || echo "Unknown")
-  echo "  status: $STATUS / $HEALTH"
-  if [[ "$STATUS" == "Synced" && "$HEALTH" == "Healthy" ]]; then
-    echo "ArgoCD: Synced + Healthy"
+wait_for_deployment \
+  "${ARGOCD_NS}" \
+  argocd-redis \
+  300s
+
+wait_for_deployment \
+  "${ARGOCD_NS}" \
+  argocd-repo-server \
+  300s
+
+wait_for_deployment \
+  "${ARGOCD_NS}" \
+  argocd-server \
+  300s
+
+wait_for_deployment \
+  "${ARGOCD_NS}" \
+  argocd-applicationset-controller \
+  300s
+
+kubectl rollout status \
+  statefulset/argocd-application-controller \
+  -n "${ARGOCD_NS}" \
+  --timeout=300s
+
+success "Componentes do ArgoCD disponíveis"
+
+log "Aplicando Application ${APPLICATION_NAME}"
+
+kubectl apply -f "${APPLICATION_FILE}"
+
+log "Aguardando aplicação ficar Synced e Healthy"
+
+application_ready=false
+
+for attempt in {1..60}; do
+  sync_status="$(
+    kubectl get application "${APPLICATION_NAME}" \
+      -n "${ARGOCD_NS}" \
+      -o jsonpath='{.status.sync.status}' \
+      2>/dev/null || echo "Unknown"
+  )"
+
+  health_status="$(
+    kubectl get application "${APPLICATION_NAME}" \
+      -n "${ARGOCD_NS}" \
+      -o jsonpath='{.status.health.status}' \
+      2>/dev/null || echo "Unknown"
+  )"
+
+  echo "  ${attempt}/60 - ${sync_status} / ${health_status}"
+
+  if [[ "${sync_status}" == "Synced" &&
+        "${health_status}" == "Healthy" ]]; then
+    application_ready=true
     break
   fi
-  sleep 10
+
+  sleep 5
 done
 
-echo "==> Abrindo port-forward..."
-pkill -f "kubectl.*port-forward.*8080" 2>/dev/null || true
-sleep 1
-kubectl port-forward svc/argocd-server 8080:80 -n "$ARGOCD_NS" >/tmp/pf-argocd.log 2>&1 &
+if [[ "${application_ready}" == true ]]; then
+  success "ArgoCD: Synced e Healthy"
+else
+  warn "Application não ficou Synced/Healthy dentro do prazo."
 
-ARGOCD_PASSWORD=$(kubectl -n "$ARGOCD_NS" get secret argocd-initial-admin-secret \
-  -o jsonpath="{.data.password}" 2>/dev/null | base64 -d 2>/dev/null || echo "não encontrado")
+  kubectl get application "${APPLICATION_NAME}" \
+    -n "${ARGOCD_NS}" \
+    -o wide || true
+fi
+
+ARGOCD_PASSWORD="$(
+  kubectl get secret argocd-initial-admin-secret \
+    -n "${ARGOCD_NS}" \
+    -o jsonpath='{.data.password}' \
+    2>/dev/null |
+    base64 -d 2>/dev/null ||
+    true
+)"
 
 echo
 echo "================================================="
 echo "ARGOCD PRONTO"
 echo "================================================="
-echo "UI:    http://localhost:8080"
-echo "User:  admin"
-echo "Pass:  ${ARGOCD_PASSWORD}"
+echo "User: admin"
+
+if [[ -n "${ARGOCD_PASSWORD}" ]]; then
+  echo "Pass: ${ARGOCD_PASSWORD}"
+else
+  echo "Pass: secret inicial não encontrado ou já removido"
+fi
+
 echo "================================================="
