@@ -47,7 +47,25 @@
 
 # 🎬 Live Demo
 
-> *(GIF coming soon)*
+Watch the complete demonstration of the SRE Platform Demo.
+
+The video presents the full platform workflow, including:
+
+- 🚀 One-command platform startup
+- ☸️ Kubernetes cluster provisioning
+- 🔄 GitOps with ArgoCD
+- 📊 Observability with Prometheus and Grafana
+- 📜 Centralized logging with Loki
+- ⚡ Horizontal Pod Autoscaler (HPA)
+- 🔥 k6 Load Testing
+- 📖 FastAPI Swagger API
+- 📈 Real-time autoscaling demonstration
+
+▶ **[Watch the Full Demo](docs/images/videos/sre-platform-demo.mp4)**
+
+---
+
+> **Tip:** If GitHub does not play the video directly in your browser, click **Download** to watch it locally.
 
 ## 💡 Why this project?
 
@@ -271,7 +289,8 @@ Done
 ├── local/
 ├── observability/
 ├── docs/
-│   └── images/
+│   ├── images/
+│   └── videos/
 ├── demo.sh
 ├── README.md
 └── LICENSE
@@ -312,7 +331,7 @@ This project showcases practical experience with:
 - ✅ k6
 - ✅ Interactive Demo Launcher
 - ⏳ Demo GIF
-- ⏳ Demonstration Video
+- ✅ Demonstration Video
 
 ---
 
