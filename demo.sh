@@ -171,6 +171,61 @@ run_in_new_terminal() {
   return 1
 }
 
+ensure_jobs_api_port_forward() {
+  local health_url="http://localhost:${API_PORT}/health"
+  local log_file="${RUNTIME_DIR}/jobs-api-port-forward.log"
+  local pid_file="${RUNTIME_DIR}/jobs-api-port-forward.pid"
+
+  if curl --fail --silent --max-time 2 "${health_url}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  mkdir -p "${RUNTIME_DIR}"
+
+  if [[ -f "${pid_file}" ]]; then
+    local existing_pid
+    existing_pid="$(cat "${pid_file}" 2>/dev/null || true)"
+
+    if [[ -n "${existing_pid}" ]] && kill -0 "${existing_pid}" 2>/dev/null; then
+      kill "${existing_pid}" 2>/dev/null || true
+      sleep 1
+    fi
+
+    rm -f "${pid_file}"
+  fi
+
+  log "Iniciando port-forward da Jobs API na porta ${API_PORT}"
+
+  kubectl port-forward \
+    -n "${APP_NS}" \
+    svc/jobs-api \
+    "${API_PORT}:8000" \
+    >"${log_file}" 2>&1 &
+
+  local port_forward_pid=$!
+  printf '%s\n' "${port_forward_pid}" > "${pid_file}"
+
+  local attempt
+  for attempt in {1..15}; do
+    if curl --fail --silent --max-time 2 "${health_url}" >/dev/null 2>&1; then
+      success "Jobs API disponível em http://localhost:${API_PORT}"
+      return 0
+    fi
+
+    if ! kill -0 "${port_forward_pid}" 2>/dev/null; then
+      warn "O port-forward da Jobs API foi encerrado inesperadamente."
+      echo "Consulte o log: ${log_file}"
+      return 1
+    fi
+
+    sleep 1
+  done
+
+  warn "A Jobs API não respondeu dentro do tempo esperado."
+  echo "Consulte o log: ${log_file}"
+  return 1
+}
+
 show_menu() {
   clear_screen
 
@@ -202,7 +257,7 @@ show_menu() {
   echo "  [6] Exibir status detalhado"
   echo "  [7] Exibir acessos e credenciais"
   echo "  [8] Encerrar port-forwards"
-  echo "  [9] Abrir Jobs API Docs"
+  echo "  [9] Abrir Swagger"
   echo "  [10] Abrir Prometheus"
   echo "  [11] Abrir ArgoCD"
   echo "  [0] Sair"
@@ -334,7 +389,16 @@ main() {
         pause_menu
         ;;
       9)
-        open_url "http://localhost:${API_PORT}/docs"
+        clear_screen
+        echo "========================================================="
+        echo "SWAGGER - JOBS API"
+        echo "========================================================="
+        echo
+
+        if ensure_jobs_api_port_forward; then
+          open_url "http://localhost:${API_PORT}/docs"
+        fi
+
         pause_menu
         ;;
       10)
