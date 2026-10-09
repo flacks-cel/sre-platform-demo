@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
 ARGOCD_NS="${ARGOCD_NS:-argocd}"
+ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.6.4}"
 APPLICATION_FILE="${PROJECT_ROOT}/infra/argocd/application.yaml"
 APPLICATION_NAME="${APPLICATION_NAME:-jobs-api}"
 
@@ -35,6 +36,7 @@ log "Instalando ou atualizando ArgoCD"
 helm upgrade --install argocd argo/argo-cd \
   --namespace "${ARGOCD_NS}" \
   --create-namespace \
+  --version "${ARGOCD_CHART_VERSION}" \
   --set configs.params."server\.insecure"=true \
   --timeout 10m
 
