@@ -19,6 +19,7 @@ ARGOCD_NS="${ARGOCD_NS:-argocd}"
 KUBE_PROMETHEUS_STACK_CHART_VERSION="${KUBE_PROMETHEUS_STACK_CHART_VERSION:-88.6.2}"
 LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-7.3.0}"
 PROMTAIL_CHART_VERSION="${PROMTAIL_CHART_VERSION:-6.17.1}"
+ARGOCD_TARGET_REVISION="${ARGOCD_TARGET_REVISION:-HEAD}"
 
 GRAFANA_PORT="${GRAFANA_PORT:-3001}"
 PROMETHEUS_PORT="${PROMETHEUS_PORT:-9091}"
@@ -27,6 +28,8 @@ API_PORT="${API_PORT:-8081}"
 LOKI_PORT="${LOKI_PORT:-3102}"
 
 DASHBOARDS_DIR="${PROJECT_ROOT}/observability/grafana/dashboards"
+METRICS_SERVER_FILE="${PROJECT_ROOT}/infra/kubernetes/metrics-server/components.yaml"
+EXPECTED_GIT_REVISION=""
 
 cd "${PROJECT_ROOT}"
 
@@ -76,13 +79,14 @@ print_banner() {
   echo "SRE PLATFORM DEMO"
   echo "Inicialização automática do ambiente local"
   echo "================================================="
-  echo "Cluster: ${CLUSTER_NAME}"
-  echo "Projeto: ${PROJECT_ROOT}"
+  echo "Cluster:          ${CLUSTER_NAME}"
+  echo "Projeto:          ${PROJECT_ROOT}"
+  echo "ArgoCD revision:  ${ARGOCD_TARGET_REVISION}"
   echo "================================================="
 }
 
 # =========================================================
-# Dependências
+# Dependências e revisão Git
 # =========================================================
 
 validate_dependencies() {
@@ -97,6 +101,7 @@ validate_dependencies() {
     curl
     base64
     python
+    git
   )
 
   local command_name
@@ -109,6 +114,39 @@ validate_dependencies() {
     die "Docker Engine não está disponível."
 
   success "Dependências disponíveis"
+}
+
+validate_git_revision() {
+  log "Validando revisão Git usada pelo ArgoCD"
+
+  local current_branch
+  local local_revision
+  local upstream_revision
+
+  current_branch="$(git branch --show-current)"
+  local_revision="$(git rev-parse HEAD)"
+  upstream_revision="$(git rev-parse '@{u}' 2>/dev/null || true)"
+
+  [[ -n "${current_branch}" ]] ||
+    die "HEAD está detached; faça checkout da branch que será testada."
+
+  [[ -n "${upstream_revision}" ]] ||
+    die "Branch ${current_branch} não possui upstream remoto. Faça push com -u antes do bootstrap."
+
+  [[ "${local_revision}" == "${upstream_revision}" ]] ||
+    die "HEAD local (${local_revision}) difere do upstream (${upstream_revision}). Há commits não enviados ou a branch local está desatualizada."
+
+  if [[ "${ARGOCD_TARGET_REVISION}" != "HEAD" &&
+        "${ARGOCD_TARGET_REVISION}" != "${current_branch}" &&
+        "${ARGOCD_TARGET_REVISION}" != "${local_revision}" ]]; then
+    die "ARGOCD_TARGET_REVISION=${ARGOCD_TARGET_REVISION} não corresponde à branch atual (${current_branch}) nem ao commit local."
+  fi
+
+  EXPECTED_GIT_REVISION="${local_revision}"
+  export EXPECTED_GIT_REVISION
+  export ARGOCD_TARGET_REVISION
+
+  success "Git remoto sincronizado: ${current_branch} @ ${EXPECTED_GIT_REVISION}"
 }
 
 # =========================================================
@@ -161,6 +199,26 @@ ensure_namespaces() {
   success "Namespaces disponíveis"
 }
 
+install_metrics_server() {
+  log "Instalando Metrics Server"
+
+  require_file "${METRICS_SERVER_FILE}"
+
+  kubectl apply -f "${METRICS_SERVER_FILE}"
+
+  wait_for_deployment \
+    kube-system \
+    metrics-server \
+    120s
+
+  kubectl wait \
+    --for=condition=Available \
+    apiservice/v1beta1.metrics.k8s.io \
+    --timeout=120s
+
+  success "Metrics APIService disponível"
+}
+
 # =========================================================
 # Helm
 # =========================================================
@@ -193,13 +251,17 @@ recover_helm_release() {
   local release_status
 
   release_status="$(
-    helm status "${release_name}"       -n "${namespace}"       -o json       2>/dev/null |
+    helm status "${release_name}" \
+      -n "${namespace}" \
+      -o json \
+      2>/dev/null |
       python -c 'import json,sys
 try:
     data=json.load(sys.stdin)
     print(data.get("info",{}).get("status",""))
 except Exception:
-    pass'       2>/dev/null || true
+    pass' \
+      2>/dev/null || true
   )"
 
   case "${release_status}" in
@@ -208,7 +270,10 @@ except Exception:
 
       local deployed_revision
       deployed_revision="$(
-        helm history "${release_name}"           -n "${namespace}"           -o json           2>/dev/null |
+        helm history "${release_name}" \
+          -n "${namespace}" \
+          -o json \
+          2>/dev/null |
           python -c 'import json,sys
 try:
     history=json.load(sys.stdin)
@@ -216,20 +281,27 @@ try:
     if deployed:
         print(max(deployed,key=lambda item:int(item["revision"]))["revision"])
 except Exception:
-    pass'           2>/dev/null || true
+    pass' \
+          2>/dev/null || true
       )"
 
       if [[ -n "${deployed_revision}" ]]; then
         log "Recuperando ${release_name} para a revisão ${deployed_revision}"
 
-        helm rollback "${release_name}" "${deployed_revision}"           -n "${namespace}"           --wait           --timeout 10m
+        helm rollback "${release_name}" "${deployed_revision}" \
+          -n "${namespace}" \
+          --wait \
+          --timeout 10m
 
         success "Release ${release_name} recuperado"
       else
         warn "Nenhuma revisão deployed encontrada para ${release_name}."
         warn "Removendo release incompleto para permitir nova instalação."
 
-        helm uninstall "${release_name}"           -n "${namespace}"           --wait           --timeout 5m || true
+        helm uninstall "${release_name}" \
+          -n "${namespace}" \
+          --wait \
+          --timeout 5m || true
       fi
       ;;
   esac
@@ -310,7 +382,6 @@ install_loki() {
     --cleanup-on-fail \
     --timeout 10m
 
-  # Remove objetos opcionais deixados por versões anteriores do chart.
   kubectl delete statefulset \
     loki-chunks-cache \
     loki-results-cache \
@@ -358,29 +429,51 @@ install_promtail() {
 # Aplicação e autoscaling
 # =========================================================
 
+prepare_jobs_api_image() {
+  log "Preparando imagem da Jobs API para o Kind"
+
+  bash "${PROJECT_ROOT}/local/deploy-app.sh" --prepare-only
+
+  success "Imagem da Jobs API disponível nos nodes Kind"
+}
+
 deploy_jobs_api() {
-  log "Executando deploy da Jobs API"
+  log "Aguardando Deployment da Jobs API reconciliado pelo ArgoCD"
 
-  bash "${PROJECT_ROOT}/local/deploy-app.sh"
+  kubectl get deployment jobs-api \
+    -n "${APP_NS}" >/dev/null 2>&1 ||
+    die "Deployment ${APP_NS}/jobs-api não foi criado pelo ArgoCD."
 
-  kubectl rollout status deployment/jobs-api \
+  wait_for_deployment \
+    "${APP_NS}" \
+    jobs-api \
+    300s
+
+  kubectl get pods \
     -n "${APP_NS}" \
-    --timeout=5m
+    -l app=jobs-api \
+    -o wide
 
   success "Jobs API disponível"
 }
 
 validate_hpa() {
-  log "Validando Metrics Server e HPA"
-
-  wait_for_metrics_api
+  log "Validando HPA com métrica de CPU ativa"
 
   kubectl get hpa jobs-api \
-    -n "${APP_NS}" \
-    >/dev/null 2>&1 ||
-    die "HPA app/jobs-api não encontrado."
+    -n "${APP_NS}" >/dev/null 2>&1 ||
+    die "HPA ${APP_NS}/jobs-api não encontrado."
 
-  success "Metrics Server e HPA disponíveis"
+  kubectl wait \
+    --for=condition=ScalingActive \
+    hpa/jobs-api \
+    -n "${APP_NS}" \
+    --timeout=180s
+
+  kubectl get hpa jobs-api \
+    -n "${APP_NS}"
+
+  success "HPA ScalingActive com métricas disponíveis"
 }
 
 # =========================================================
@@ -663,6 +756,9 @@ print_final_summary() {
   echo "  ✔ ArgoCD"
   echo "  ✔ ${DASHBOARD_COUNT:-0} dashboards"
   echo
+  echo "Revisão Git testada: ${EXPECTED_GIT_REVISION}"
+  echo "ArgoCD target:       ${ARGOCD_TARGET_REVISION}"
+  echo
   echo "-------------------------------------------------"
   echo "ACESSOS"
   echo "-------------------------------------------------"
@@ -737,6 +833,7 @@ main() {
   print_banner
 
   validate_dependencies
+  validate_git_revision
 
   ensure_kind_cluster
   ensure_namespaces
@@ -746,11 +843,13 @@ main() {
   install_kube_prometheus_stack
   install_loki
   install_promtail
+  install_metrics_server
 
+  prepare_jobs_api_image
+  configure_argocd
   deploy_jobs_api
   validate_hpa
 
-  configure_argocd
   provision_dashboards
 
   start_local_endpoints
