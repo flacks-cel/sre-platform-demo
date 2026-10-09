@@ -15,6 +15,39 @@ LOCAL_CONTAINER="${LOCAL_CONTAINER:-jobs-api}"
 LOCAL_IMAGE="${LOCAL_IMAGE:-sre-platform-demo-jobs-api}"
 KIND_IMAGE="${KIND_IMAGE:-jobs-api:local}"
 
+PREPARE_ONLY=false
+
+usage() {
+  cat <<'EOF'
+Uso:
+  ./local/deploy-app.sh [--prepare-only]
+
+Sem argumentos:
+  builda/importa a imagem local e reinicia o Deployment existente.
+
+--prepare-only:
+  builda/importa a imagem nos nodes Kind sem exigir que o Deployment exista.
+  Use este modo no bootstrap limpo antes do ArgoCD criar o workload.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prepare-only)
+      PREPARE_ONLY=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      die "Argumento desconhecido: $1"
+      ;;
+  esac
+done
+
 TAR_FILE="$(mktemp -t jobs-api-local-XXXXXX.tar)"
 
 cleanup() {
@@ -110,11 +143,22 @@ for node in "${KIND_NODES[@]}"; do
     <"${TAR_FILE}"
 done
 
+if [[ "${PREPARE_ONLY}" == true ]]; then
+  echo
+  echo "================================================="
+  echo "IMAGEM PREPARADA PARA O KIND"
+  echo "================================================="
+  echo "Imagem: ${KIND_IMAGE}"
+  echo "Modo:   prepare-only"
+  echo "================================================="
+  exit 0
+fi
+
 log "Reiniciando Deployment"
 
 kubectl get deployment "${DEPLOYMENT}" \
   -n "${NAMESPACE}" >/dev/null 2>&1 ||
-  die "Deployment ${NAMESPACE}/${DEPLOYMENT} não encontrado."
+  die "Deployment ${NAMESPACE}/${DEPLOYMENT} não encontrado. No bootstrap limpo, execute este script com --prepare-only e deixe o ArgoCD criar o workload."
 
 kubectl rollout restart \
   "deployment/${DEPLOYMENT}" \
