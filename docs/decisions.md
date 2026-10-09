@@ -16,7 +16,7 @@ For memory-limit analysis, a previously observed memory level above a proposed l
 
 Praeva must not encode telemetry completeness into the risk level itself. A change can be dangerous while the available evidence is incomplete. Conversely, high-quality evidence can show a low-risk change.
 
-The exact deterministic evidence-quality model is intentionally deferred until Spike 001 exposes real sample coverage, scrape cadence, and data gaps.
+The exact deterministic evidence-quality model is intentionally deferred until later spikes define the production-grade rules for sample coverage, scrape cadence, data gaps, and environment health.
 
 CPU throttling is an observed fact about constrained demand. It is not, by itself, evidence corruption. It can make exact unconstrained capacity estimation impossible while still being strong evidence that current demand is constrained.
 
@@ -28,16 +28,38 @@ If required runtime telemetry is absent or unusable, Praeva returns `UNKNOWN` fo
 
 ## ADR-003 — Use per-pod/per-container telemetry for resource sizing
 
-**Status:** Proposed — pending Spike 001
+**Status:** Accepted
 
-Candidate decision: resource sizing should evaluate individual pod/container behavior rather than summing CPU across replicas. Summing replicas would incorrectly turn total workload consumption into a per-container limit recommendation.
+Resource sizing evaluates individual pod/container behavior rather than summing CPU across replicas. Summing replicas would incorrectly turn total workload consumption into a per-container limit recommendation.
 
-Spike 001 must validate how duplicate series, short-lived pods, HPA scaling, and historical ReplicaSets affect this rule before it is accepted.
+Spike 001 validated this assumption against the real lab. HPA-created and short-lived pods remained individually visible in Prometheus history, including their ReplicaSet ownership and sample coverage. During the sustained run, one pod approached its configured 500m CPU limit while other HPA replicas showed materially different usage, demonstrating why per-container evidence must remain separate rather than being collapsed into total workload CPU.
+
+Historical/duplicate labelsets must still be surfaced so selection mistakes can be detected. The spike's regex selector and worst-series grouping remain experimental implementation shortcuts, not the production selection rule.
 
 ## ADR-004 — CPU evidence discloses the rate window
 
-**Status:** Proposed — pending Spike 001
+**Status:** Accepted
 
-Candidate decision: every CPU statistic derived from a counter rate must disclose the rate window used (`rate[2m]`, `rate[5m]`, etc.). A longer window smooths short bursts and therefore changes the observed maximum.
+Every CPU statistic derived from a counter rate must disclose the rate window used (`rate[2m]`, `rate[5m]`, etc.). A longer window smooths short bursts and therefore changes the observed maximum.
 
-Spike 001 explicitly compares 2m and 5m windows under a ~30s burst and a ~10m sustained load before this decision is accepted.
+Spike 001 demonstrated the effect directly in the real lab: for the observed ~30s burst, the 5m maximum was 63.86% lower than the 2m maximum; for the observed sustained round, the 5m maximum was only 1.51% lower. These values are workload-specific observations, not Praeva constants.
+
+The product must therefore expose the chosen rate window with the evidence and must not compare CPU statistics from different windows as if they were equivalent.
+
+## ADR-006 — Historical Prometheus time and live Kubernetes state are distinct
+
+**Status:** Accepted
+
+A Prometheus query evaluated at an explicit time `T` is historical evidence. Deployment, HPA, and `kubectl top` reads performed during collection are live observations at collection time.
+
+Praeva must label these time semantics explicitly. A live HPA replica count must not be presented as if it were the HPA state at historical evaluation time `T` unless historical HPA telemetry is queried separately.
+
+## ADR-007 — A failed controlled-load round is invalid evidence
+
+**Status:** Accepted
+
+An experiment round intended to produce controlled-load evidence is valid only if its load preconditions pass and all controlled load calls succeed.
+
+The Spike 001 harness must preflight the Jobs API before starting the round, stop on the first failed load call, return a non-zero exit status, and avoid suggesting follow-up evidence collection for that invalid round.
+
+This rule is about experiment validity, not production risk classification.
