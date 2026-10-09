@@ -74,6 +74,7 @@ def prom_get(
     if params:
         encoded = urllib.parse.urlencode(params, doseq=True)
         url = f"{url}?{encoded}"
+
     request = urllib.request.Request(
         url,
         headers={"Accept": "application/json"},
@@ -83,6 +84,7 @@ def prom_get(
             payload = json.load(response)
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Prometheus request failed: {url}: {exc}") from exc
+
     if payload.get("status") != "success":
         raise RuntimeError(f"Prometheus returned non-success for {url}: {payload}")
     return payload.get("data")
@@ -170,8 +172,7 @@ def find_container(
     if not deployment:
         return None
     pod_spec = deployment.get("spec", {}).get("template", {}).get("spec", {})
-    containers = pod_spec.get("containers", [])
-    for container in containers:
+    for container in pod_spec.get("containers", []):
         if container.get("name") == container_name:
             return container
     return None
@@ -242,11 +243,12 @@ def print_mapping(mapping: dict[str, float], suffix: str = "") -> None:
 
 
 def collect(args: argparse.Namespace) -> int:
+    collection_started = time.time()
     if args.evaluation_time:
         evaluation_time = parse_iso8601(args.evaluation_time)
         time_source = "explicit"
     else:
-        evaluation_time = time.time() - args.lag_seconds
+        evaluation_time = collection_started - args.lag_seconds
         time_source = f"now - {args.lag_seconds}s"
 
     pod_regex = args.pod_regex or f"{args.workload}-.*"
@@ -274,16 +276,21 @@ def collect(args: argparse.Namespace) -> int:
 
     print("PRAEVA SPIKE 001 - CPU EVIDENCE")
     print("================================")
-    print(f"Evaluation time: {utc_iso(evaluation_time)} ({time_source})")
-    print(f"Prometheus:      {args.prometheus_url}")
-    print(f"Prometheus ver.: {version}")
-    print(f"Window:          {args.window}")
-    print(f"Namespace:       {args.namespace}")
-    print(f"Workload:        {args.workload}")
-    print(f"Container:       {args.container}")
-    print(f"Pod regex:       {pod_regex}  [spike-only selector]")
+    print(f"Evaluation time:  {utc_iso(evaluation_time)} ({time_source})")
+    print(f"Collection start: {utc_iso(collection_started)} (live snapshots)")
+    print(f"Prometheus:       {args.prometheus_url}")
+    print(f"Prometheus ver.:  {version}")
+    print(f"Window:           {args.window}")
+    print(f"Namespace:        {args.namespace}")
+    print(f"Workload:         {args.workload}")
+    print(f"Container:        {args.container}")
+    print(f"Pod regex:        {pod_regex}  [spike-only selector]")
+    print(
+        "Time semantics: historical metric queries use Evaluation time T; "
+        "Kubernetes facts, kubectl top, and active scrape targets are live."
+    )
 
-    print_header("KUBERNETES FACTS")
+    print_header("KUBERNETES FACTS (LIVE)")
     deployment = kubernetes_deployment(args.namespace, args.workload)
     container = find_container(deployment, args.container)
     if deployment:
@@ -312,7 +319,7 @@ def collect(args: argparse.Namespace) -> int:
     )
     print(hpa or "<none>")
 
-    print_header("CADVISOR SCRAPE TARGETS")
+    print_header("CADVISOR SCRAPE TARGETS (LIVE)")
     targets = relevant_scrape_targets(args.prometheus_url)
     if not targets:
         print("No kubelet/cAdvisor target detected via /api/v1/targets.")
@@ -452,10 +459,10 @@ def collect(args: argparse.Namespace) -> int:
         worst_ratio = max(throttling.values()) * 100
         print(f"Worst throttled-period ratio: {worst_ratio:.3f}%")
 
-    print_header("REFERENCE SNAPSHOT")
+    print_header("REFERENCE SNAPSHOT (LIVE)")
     print(
         "kubectl top is a sanity reference only; its sampling/window can differ "
-        "from Prometheus."
+        "from Prometheus and it is not evaluated at historical T."
     )
     top_output = run_kubectl(
         [
@@ -475,6 +482,7 @@ def collect(args: argparse.Namespace) -> int:
     print("- No risk classification performed.")
     print("- No evidence-quality grade performed.")
     print("- No safe CPU capacity recommendation performed.")
+    print("- Live Kubernetes facts are distinct from historical Prometheus time T.")
     print("- The default pod regex is spike-only and must not become the product selector.")
     return 0
 
@@ -515,6 +523,30 @@ def top_sampler(
         stop.wait(interval)
 
 
+def api_preflight(base_url: str) -> str:
+    health_url = f"{base_url.rstrip('/')}/health"
+    request = urllib.request.Request(
+        health_url,
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            body = response.read().decode("utf-8", errors="replace").strip()
+            status = getattr(response, "status", 200)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Jobs API preflight failed for {health_url}: {exc}"
+        ) from exc
+
+    if not 200 <= int(status) < 300:
+        raise RuntimeError(
+            f"Jobs API preflight failed for {health_url}: HTTP {status}"
+        )
+    if len(body) > 120:
+        body = body[:117] + "..."
+    return body or f"HTTP {status}"
+
+
 def burn_once(url: str, seconds: float) -> tuple[bool, str]:
     query = urllib.parse.urlencode({"seconds": f"{seconds:g}"})
     full_url = f"{url.rstrip('/')}/simulate/cpu?{query}"
@@ -533,10 +565,15 @@ def run_load(args: argparse.Namespace) -> int:
         raise RuntimeError(
             "--call-seconds must be > 0 and <= 30 (jobs-api endpoint limit)"
         )
+    if args.top_interval <= 0:
+        raise RuntimeError("--top-interval must be > 0")
+
+    preflight_detail = api_preflight(args.api_url)
 
     print("PRAEVA SPIKE 001 - CONTROLLED CPU LOAD")
     print("========================================")
     print(f"API URL:          {args.api_url}")
+    print(f"API preflight:    OK ({preflight_detail})")
     print(f"Target duration:  {args.duration:.0f}s")
     print(f"CPU call length:  {args.call_seconds:.0f}s")
     print(f"Top interval:     {args.top_interval:.0f}s")
@@ -561,6 +598,8 @@ def run_load(args: argparse.Namespace) -> int:
             ok, detail = burn_once(args.api_url, call_seconds)
             call_end = time.time()
             calls.append((call_start, call_end, ok, detail))
+            if not ok:
+                break
     finally:
         stop.set()
         sampler.join(timeout=args.top_interval + 2)
@@ -588,6 +627,16 @@ def run_load(args: argparse.Namespace) -> int:
         print_header("LOAD CALL FAILURES")
         for call_start, call_end, _, detail in failures:
             print(f"{utc_iso(call_start)} -> {utc_iso(call_end)}: {detail}")
+
+        print_header("ROUND RESULT")
+        print(
+            "INVALID: a controlled load call failed. The round stopped early; "
+            "do not use it as controlled-load evidence."
+        )
+        return 2
+
+    print_header("ROUND RESULT")
+    print("VALID: all controlled load calls succeeded.")
 
     suggested_collect_at = end + max(args.collect_delay, 0)
     print_header("NEXT COLLECTION")
