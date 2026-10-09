@@ -16,6 +16,10 @@ APP_NS="${APP_NS:-app}"
 OBS_NS="${OBS_NS:-observability}"
 ARGOCD_NS="${ARGOCD_NS:-argocd}"
 
+KUBE_PROMETHEUS_STACK_CHART_VERSION="${KUBE_PROMETHEUS_STACK_CHART_VERSION:-88.6.2}"
+LOKI_CHART_VERSION="${LOKI_CHART_VERSION:-7.3.0}"
+PROMTAIL_CHART_VERSION="${PROMTAIL_CHART_VERSION:-6.17.1}"
+
 GRAFANA_PORT="${GRAFANA_PORT:-3001}"
 PROMETHEUS_PORT="${PROMETHEUS_PORT:-9091}"
 ARGOCD_PORT="${ARGOCD_PORT:-8080}"
@@ -242,6 +246,7 @@ install_kube_prometheus_stack() {
 
   helm upgrade --install kube-prometheus-stack \
     prometheus-community/kube-prometheus-stack \
+    --version "${KUBE_PROMETHEUS_STACK_CHART_VERSION}" \
     -n "${OBS_NS}" \
     --create-namespace \
     --reset-values \
@@ -280,6 +285,7 @@ install_loki() {
   recover_helm_release loki "${OBS_NS}"
 
   helm upgrade --install loki grafana/loki \
+    --version "${LOKI_CHART_VERSION}" \
     -n "${OBS_NS}" \
     --create-namespace \
     --reset-values \
@@ -332,6 +338,7 @@ install_promtail() {
   recover_helm_release promtail "${OBS_NS}"
 
   helm upgrade --install promtail grafana/promtail \
+    --version "${PROMTAIL_CHART_VERSION}" \
     -n "${OBS_NS}" \
     --create-namespace \
     --reset-values \
