@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Praeva Spike 001 - CPU Evidence.
 
-Collects reproducible CPU evidence for jobs-api from Prometheus and Kubernetes.
+Collect reproducible CPU evidence for jobs-api from Prometheus and Kubernetes.
 No risk classification is performed in this spike.
-
-Designed to run with Python 3 standard library only.
 """
 
 from __future__ import annotations
@@ -20,10 +18,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Iterable
-
+from datetime import UTC, datetime
+from typing import Any
 
 DEFAULT_PROMETHEUS_URL = "http://localhost:9091"
 DEFAULT_API_URL = "http://localhost:8081"
@@ -42,7 +40,7 @@ class PromResult:
 
 
 def utc_iso(ts: float) -> str:
-    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.fromtimestamp(ts, tz=UTC).isoformat().replace("+00:00", "Z")
 
 
 def parse_iso8601(value: str) -> float:
@@ -51,7 +49,7 @@ def parse_iso8601(value: str) -> float:
         text = text[:-1] + "+00:00"
     dt = datetime.fromisoformat(text)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.timestamp()
 
 
@@ -67,12 +65,19 @@ def parse_duration_seconds(value: str) -> float | None:
     return None
 
 
-def prom_get(base_url: str, path: str, params: dict[str, Any] | None = None) -> Any:
+def prom_get(
+    base_url: str,
+    path: str,
+    params: dict[str, Any] | None = None,
+) -> Any:
     url = base_url.rstrip("/") + path
     if params:
         encoded = urllib.parse.urlencode(params, doseq=True)
         url = f"{url}?{encoded}"
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    request = urllib.request.Request(
+        url,
+        headers={"Accept": "application/json"},
+    )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             payload = json.load(response)
@@ -83,12 +88,21 @@ def prom_get(base_url: str, path: str, params: dict[str, Any] | None = None) -> 
     return payload.get("data")
 
 
-def prom_query(base_url: str, query: str, evaluation_time: float) -> list[PromResult]:
-    data = prom_get(base_url, "/api/v1/query", {"query": query, "time": f"{evaluation_time:.3f}"})
+def prom_query(
+    base_url: str,
+    query: str,
+    evaluation_time: float,
+) -> list[PromResult]:
+    params = {"query": query, "time": f"{evaluation_time:.3f}"}
+    data = prom_get(base_url, "/api/v1/query", params)
     if not isinstance(data, dict):
         raise RuntimeError(f"Unexpected Prometheus response: {data!r}")
     if data.get("resultType") != "vector":
-        raise RuntimeError(f"Expected vector result, got {data.get('resultType')!r} for query: {query}")
+        result_type = data.get("resultType")
+        raise RuntimeError(
+            f"Expected vector result, got {result_type!r} for query: {query}"
+        )
+
     results: list[PromResult] = []
     for item in data.get("result", []):
         raw_value = str(item.get("value", [None, ""])[1])
@@ -98,28 +112,49 @@ def prom_query(base_url: str, query: str, evaluation_time: float) -> list[PromRe
                 number = None
         except (TypeError, ValueError):
             number = None
-        results.append(PromResult(metric=dict(item.get("metric", {})), value=number, raw_value=raw_value))
+        results.append(
+            PromResult(
+                metric=dict(item.get("metric", {})),
+                value=number,
+                raw_value=raw_value,
+            )
+        )
     return results
 
 
 def run_kubectl(args: list[str], *, allow_failure: bool = False) -> str:
     command = ["kubectl", *args]
     try:
-        completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         if allow_failure:
             return f"<kubectl unavailable: {exc}>"
         raise RuntimeError(f"kubectl failed to execute: {exc}") from exc
+
     if completed.returncode != 0:
         if allow_failure:
             stderr = completed.stderr.strip() or f"exit {completed.returncode}"
             return f"<kubectl failed: {stderr}>"
-        raise RuntimeError(f"{' '.join(command)} failed: {completed.stderr.strip()}")
+        raise RuntimeError(
+            f"{' '.join(command)} failed: {completed.stderr.strip()}"
+        )
     return completed.stdout.strip()
 
 
-def kubernetes_deployment(namespace: str, workload: str) -> dict[str, Any] | None:
-    text = run_kubectl(["get", "deployment", workload, "-n", namespace, "-o", "json"], allow_failure=True)
+def kubernetes_deployment(
+    namespace: str,
+    workload: str,
+) -> dict[str, Any] | None:
+    text = run_kubectl(
+        ["get", "deployment", workload, "-n", namespace, "-o", "json"],
+        allow_failure=True,
+    )
     if text.startswith("<kubectl"):
         return None
     try:
@@ -128,22 +163,31 @@ def kubernetes_deployment(namespace: str, workload: str) -> dict[str, Any] | Non
         return None
 
 
-def find_container(deployment: dict[str, Any] | None, container_name: str) -> dict[str, Any] | None:
+def find_container(
+    deployment: dict[str, Any] | None,
+    container_name: str,
+) -> dict[str, Any] | None:
     if not deployment:
         return None
-    containers = deployment.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+    pod_spec = deployment.get("spec", {}).get("template", {}).get("spec", {})
+    containers = pod_spec.get("containers", [])
     for container in containers:
         if container.get("name") == container_name:
             return container
     return None
 
 
-def group_by_pod(results: Iterable[PromResult], *, choose: str = "max") -> dict[str, float]:
+def group_by_pod(
+    results: Iterable[PromResult],
+    *,
+    choose: str = "max",
+) -> dict[str, float]:
     grouped: dict[str, list[float]] = defaultdict(list)
     for result in results:
         pod = result.metric.get("pod", "<no-pod>")
         if result.value is not None:
             grouped[pod].append(result.value)
+
     output: dict[str, float] = {}
     for pod, values in grouped.items():
         output[pod] = max(values) if choose == "max" else min(values)
@@ -156,8 +200,12 @@ def series_identity(metric: dict[str, str]) -> str:
     return ", ".join(parts) if parts else json.dumps(metric, sort_keys=True)
 
 
-def metric_selector(namespace: str, pod_regex: str, container: str, metric_name: str) -> str:
-    # pod_regex is intentionally configurable. The default regex is acceptable for this spike only.
+def metric_selector(
+    namespace: str,
+    pod_regex: str,
+    container: str,
+    metric_name: str,
+) -> str:
     return (
         f'{metric_name}{{namespace="{namespace}",pod=~"{pod_regex}",'
         f'container="{container}",container!="",container!="POD"}}'
@@ -173,7 +221,9 @@ def relevant_scrape_targets(base_url: str) -> list[dict[str, Any]]:
         labels = target.get("labels", {}) or {}
         job = str(labels.get("job", ""))
         scrape_pool = str(target.get("scrapePool", ""))
-        if "/metrics/cadvisor" in scrape_url or "kubelet" in job.lower() or "kubelet" in scrape_pool.lower():
+        is_cadvisor = "/metrics/cadvisor" in scrape_url
+        is_kubelet = "kubelet" in job.lower() or "kubelet" in scrape_pool.lower()
+        if is_cadvisor or is_kubelet:
             relevant.append(target)
     return relevant
 
@@ -201,22 +251,32 @@ def collect(args: argparse.Namespace) -> int:
 
     pod_regex = args.pod_regex or f"{args.workload}-.*"
     cpu_selector = metric_selector(
-        args.namespace, pod_regex, args.container, "container_cpu_usage_seconds_total"
+        args.namespace,
+        pod_regex,
+        args.container,
+        "container_cpu_usage_seconds_total",
     )
     throttled_selector = metric_selector(
-        args.namespace, pod_regex, args.container, "container_cpu_cfs_throttled_periods_total"
+        args.namespace,
+        pod_regex,
+        args.container,
+        "container_cpu_cfs_throttled_periods_total",
     )
     periods_selector = metric_selector(
-        args.namespace, pod_regex, args.container, "container_cpu_cfs_periods_total"
+        args.namespace,
+        pod_regex,
+        args.container,
+        "container_cpu_cfs_periods_total",
     )
 
     build = prom_get(args.prometheus_url, "/api/v1/status/buildinfo")
+    version = build.get("version", "<unknown>") if isinstance(build, dict) else "<unknown>"
 
     print("PRAEVA SPIKE 001 - CPU EVIDENCE")
     print("================================")
     print(f"Evaluation time: {utc_iso(evaluation_time)} ({time_source})")
     print(f"Prometheus:      {args.prometheus_url}")
-    print(f"Prometheus ver.: {build.get('version', '<unknown>') if isinstance(build, dict) else '<unknown>'}")
+    print(f"Prometheus ver.: {version}")
     print(f"Window:          {args.window}")
     print(f"Namespace:       {args.namespace}")
     print(f"Workload:        {args.workload}")
@@ -229,10 +289,14 @@ def collect(args: argparse.Namespace) -> int:
     if deployment:
         spec_replicas = deployment.get("spec", {}).get("replicas")
         ready_replicas = deployment.get("status", {}).get("readyReplicas", 0)
-        available_replicas = deployment.get("status", {}).get("availableReplicas", 0)
-        print(f"Deployment replicas (spec/ready/available): {spec_replicas}/{ready_replicas}/{available_replicas}")
+        available = deployment.get("status", {}).get("availableReplicas", 0)
+        print(
+            "Deployment replicas (spec/ready/available): "
+            f"{spec_replicas}/{ready_replicas}/{available}"
+        )
     else:
         print("Deployment: <unavailable>")
+
     current_cpu_limit = None
     current_cpu_request = None
     if container:
@@ -242,7 +306,11 @@ def collect(args: argparse.Namespace) -> int:
     print(f"Current CPU request: {current_cpu_request or '<not set/unavailable>'}")
     print(f"Current CPU limit:   {current_cpu_limit or '<not set/unavailable>'}")
     print("Current HPA snapshot:")
-    print(run_kubectl(["get", "hpa", args.workload, "-n", args.namespace], allow_failure=True) or "<none>")
+    hpa = run_kubectl(
+        ["get", "hpa", args.workload, "-n", args.namespace],
+        allow_failure=True,
+    )
+    print(hpa or "<none>")
 
     print_header("CADVISOR SCRAPE TARGETS")
     targets = relevant_scrape_targets(args.prometheus_url)
@@ -251,35 +319,47 @@ def collect(args: argparse.Namespace) -> int:
     else:
         for target in targets:
             labels = target.get("labels", {}) or {}
+            job = labels.get("job", "<unknown>")
+            instance = labels.get("instance", "<unknown>")
+            interval = target.get("scrapeInterval", "<unknown>")
+            scrape_url = target.get("scrapeUrl", "<unknown>")
             print(
-                f"job={labels.get('job', '<unknown>')} instance={labels.get('instance', '<unknown>')} "
-                f"interval={target.get('scrapeInterval', '<unknown>')} url={target.get('scrapeUrl', '<unknown>')}"
+                f"job={job} instance={instance} interval={interval} "
+                f"url={scrape_url}"
             )
-        intervals = [parse_duration_seconds(str(t.get("scrapeInterval", ""))) for t in targets]
-        numeric_intervals = [x for x in intervals if x is not None]
+        intervals = [
+            parse_duration_seconds(str(target.get("scrapeInterval", "")))
+            for target in targets
+        ]
+        numeric_intervals = [value for value in intervals if value is not None]
         if numeric_intervals and max(numeric_intervals) >= 60:
-            print("WARNING: detected scrape interval >= 60s; rate[2m] may be unstable.")
+            print("WARNING: scrape interval >= 60s; rate[2m] may be unstable.")
 
     print_header("RAW SERIES AND SAMPLE COVERAGE")
-    series_count_q = f"count(count_over_time({cpu_selector}[{args.window}]))"
-    series_count = prom_query(args.prometheus_url, series_count_q, evaluation_time)
-    count_value = series_count[0].value if series_count and series_count[0].value is not None else 0
+    count_query = f"count(count_over_time({cpu_selector}[{args.window}]))"
+    series_count = prom_query(args.prometheus_url, count_query, evaluation_time)
+    count_value = 0.0
+    if series_count and series_count[0].value is not None:
+        count_value = series_count[0].value
     print(f"Historical series count: {int(count_value)}")
 
-    sample_q = f"count_over_time({cpu_selector}[{args.window}])"
-    sample_results = prom_query(args.prometheus_url, sample_q, evaluation_time)
+    sample_query = f"count_over_time({cpu_selector}[{args.window}])"
+    sample_results = prom_query(args.prometheus_url, sample_query, evaluation_time)
     if not sample_results:
         print("No CPU samples found in the selected window.")
     for result in sorted(sample_results, key=lambda item: series_identity(item.metric)):
-        value_text = f"{int(result.value)}" if result.value is not None else result.raw_value
+        value_text = result.raw_value
+        if result.value is not None:
+            value_text = str(int(result.value))
         print(f"samples={value_text:<6} {series_identity(result.metric)}")
 
-    first_q = f"min_over_time(timestamp({cpu_selector})[{args.window}:1m])"
-    last_q = f"max_over_time(timestamp({cpu_selector})[{args.window}:1m])"
-    first_results = prom_query(args.prometheus_url, first_q, evaluation_time)
-    last_results = prom_query(args.prometheus_url, last_q, evaluation_time)
+    first_query = f"min_over_time(timestamp({cpu_selector})[{args.window}:1m])"
+    last_query = f"max_over_time(timestamp({cpu_selector})[{args.window}:1m])"
+    first_results = prom_query(args.prometheus_url, first_query, evaluation_time)
+    last_results = prom_query(args.prometheus_url, last_query, evaluation_time)
     first_by_pod = group_by_pod(first_results, choose="min")
     last_by_pod = group_by_pod(last_results, choose="max")
+
     print("\nCoverage by pod (approximate from 1m subquery step):")
     pods = sorted(set(first_by_pod) | set(last_by_pod))
     if not pods:
@@ -292,11 +372,11 @@ def collect(args: argparse.Namespace) -> int:
         print(f"{pod}: first={first_text} last={last_text}")
 
     print_header("REPLICASET HISTORY")
-    owner_q = (
-        f'max_over_time(kube_pod_owner{{namespace="{args.namespace}",pod=~"{pod_regex}",'
-        f'owner_kind="ReplicaSet"}}[{args.window}])'
+    owner_query = (
+        f'max_over_time(kube_pod_owner{{namespace="{args.namespace}",'
+        f'pod=~"{pod_regex}",owner_kind="ReplicaSet"}}[{args.window}])'
     )
-    owner_results = prom_query(args.prometheus_url, owner_q, evaluation_time)
+    owner_results = prom_query(args.prometheus_url, owner_query, evaluation_time)
     if not owner_results:
         print("<no kube_pod_owner history available>")
     else:
@@ -312,10 +392,18 @@ def collect(args: argparse.Namespace) -> int:
     print_header("CPU RATE - PER POD")
     rate_summaries: dict[str, dict[str, float]] = {}
     for rate_window in args.rate_windows:
-        p95_q = f"quantile_over_time(0.95, rate({cpu_selector}[{rate_window}])[{args.window}:1m]) * 1000"
-        max_q = f"max_over_time(rate({cpu_selector}[{rate_window}])[{args.window}:1m]) * 1000"
-        p95 = group_by_pod(prom_query(args.prometheus_url, p95_q, evaluation_time), choose="max")
-        max_rate = group_by_pod(prom_query(args.prometheus_url, max_q, evaluation_time), choose="max")
+        p95_query = (
+            "quantile_over_time(0.95, "
+            f"rate({cpu_selector}[{rate_window}])[{args.window}:1m]) * 1000"
+        )
+        max_query = (
+            "max_over_time("
+            f"rate({cpu_selector}[{rate_window}])[{args.window}:1m]) * 1000"
+        )
+        p95_results = prom_query(args.prometheus_url, p95_query, evaluation_time)
+        max_results = prom_query(args.prometheus_url, max_query, evaluation_time)
+        p95 = group_by_pod(p95_results, choose="max")
+        max_rate = group_by_pod(max_results, choose="max")
         rate_summaries[rate_window] = {
             "p95_worst": max(p95.values()) if p95 else math.nan,
             "max_worst": max(max_rate.values()) if max_rate else math.nan,
@@ -330,14 +418,22 @@ def collect(args: argparse.Namespace) -> int:
         max5 = rate_summaries["5m"]["max_worst"]
         if not math.isnan(max2) and not math.isnan(max5) and max2 != 0:
             hidden = (max2 - max5) / max2 * 100.0
-            print(f"\n5m smoothing vs 2m max: {hidden:.2f}% lower (for this observed workload only)")
+            print(
+                f"\n5m smoothing vs 2m max: {hidden:.2f}% lower "
+                "(for this observed workload only)"
+            )
 
     print_header("CPU THROTTLING - PER POD")
-    throttle_q = (
+    throttle_query = (
         f"increase({throttled_selector}[{args.window}]) "
         f"/ increase({periods_selector}[{args.window}])"
     )
-    throttling = group_by_pod(prom_query(args.prometheus_url, throttle_q, evaluation_time), choose="max")
+    throttle_results = prom_query(
+        args.prometheus_url,
+        throttle_query,
+        evaluation_time,
+    )
+    throttling = group_by_pod(throttle_results, choose="max")
     if throttling:
         for pod, ratio in sorted(throttling.items()):
             print(f"{pod}: {ratio * 100:.3f}% throttled periods")
@@ -353,11 +449,27 @@ def collect(args: argparse.Namespace) -> int:
         if not math.isnan(max_value):
             print(f"Worst observed max rate[{rate_window}]: {max_value:.3f}m")
     if throttling:
-        print(f"Worst throttled-period ratio: {max(throttling.values()) * 100:.3f}%")
+        worst_ratio = max(throttling.values()) * 100
+        print(f"Worst throttled-period ratio: {worst_ratio:.3f}%")
 
     print_header("REFERENCE SNAPSHOT")
-    print("kubectl top is a sanity reference only; its sampling/window can differ from Prometheus.")
-    print(run_kubectl(["top", "pod", "-n", args.namespace, "-l", f"app={args.workload}", "--containers"], allow_failure=True) or "<no output>")
+    print(
+        "kubectl top is a sanity reference only; its sampling/window can differ "
+        "from Prometheus."
+    )
+    top_output = run_kubectl(
+        [
+            "top",
+            "pod",
+            "-n",
+            args.namespace,
+            "-l",
+            f"app={args.workload}",
+            "--containers",
+        ],
+        allow_failure=True,
+    )
+    print(top_output or "<no output>")
 
     print_header("SPIKE NOTES")
     print("- No risk classification performed.")
@@ -373,14 +485,30 @@ def replica_snapshot(namespace: str, workload: str) -> str:
         return "unavailable"
     spec = deployment.get("spec", {}).get("replicas")
     status = deployment.get("status", {})
-    return f"spec={spec} ready={status.get('readyReplicas', 0)} available={status.get('availableReplicas', 0)}"
+    ready = status.get("readyReplicas", 0)
+    available = status.get("availableReplicas", 0)
+    return f"spec={spec} ready={ready} available={available}"
 
 
-def top_sampler(stop: threading.Event, namespace: str, workload: str, interval: float, observations: list[tuple[float, str]]) -> None:
+def top_sampler(
+    stop: threading.Event,
+    namespace: str,
+    workload: str,
+    interval: float,
+    observations: list[tuple[float, str]],
+) -> None:
     while not stop.is_set():
         ts = time.time()
         text = run_kubectl(
-            ["top", "pod", "-n", namespace, "-l", f"app={workload}", "--containers"],
+            [
+                "top",
+                "pod",
+                "-n",
+                namespace,
+                "-l",
+                f"app={workload}",
+                "--containers",
+            ],
             allow_failure=True,
         )
         observations.append((ts, text))
@@ -402,7 +530,9 @@ def run_load(args: argparse.Namespace) -> int:
     if args.duration <= 0:
         raise RuntimeError("--duration must be > 0")
     if args.call_seconds <= 0 or args.call_seconds > 30:
-        raise RuntimeError("--call-seconds must be > 0 and <= 30 (jobs-api endpoint limit)")
+        raise RuntimeError(
+            "--call-seconds must be > 0 and <= 30 (jobs-api endpoint limit)"
+        )
 
     print("PRAEVA SPIKE 001 - CONTROLLED CPU LOAD")
     print("========================================")
@@ -436,10 +566,15 @@ def run_load(args: argparse.Namespace) -> int:
         sampler.join(timeout=args.top_interval + 2)
 
     end = time.time()
+    success_count = sum(1 for call in calls if call[2])
+    failure_count = sum(1 for call in calls if not call[2])
     print(f"Started:          {utc_iso(start)}")
     print(f"Finished:         {utc_iso(end)}")
     print(f"Actual duration:  {end - start:.1f}s")
-    print(f"Calls:            {len(calls)} (success={sum(1 for c in calls if c[2])}, failed={sum(1 for c in calls if not c[2])})")
+    print(
+        f"Calls:            {len(calls)} "
+        f"(success={success_count}, failed={failure_count})"
+    )
     print(f"Replicas after:   {replica_snapshot(args.namespace, args.workload)}")
 
     print_header("KUBECTL TOP OBSERVATIONS")
@@ -448,7 +583,7 @@ def run_load(args: argparse.Namespace) -> int:
     for ts, text in observations:
         print(f"\n[{utc_iso(ts)}]\n{text}")
 
-    failures = [c for c in calls if not c[2]]
+    failures = [call for call in calls if not call[2]]
     if failures:
         print_header("LOAD CALL FAILURES")
         for call_start, call_end, _, detail in failures:
@@ -457,21 +592,28 @@ def run_load(args: argparse.Namespace) -> int:
     suggested_collect_at = end + max(args.collect_delay, 0)
     print_header("NEXT COLLECTION")
     print(
-        f"To avoid ingestion-edge instability, collect after {utc_iso(suggested_collect_at)} "
-        f"with an evaluation T a little before collection time."
+        "To avoid ingestion-edge instability, collect after "
+        f"{utc_iso(suggested_collect_at)} with an evaluation T a little before "
+        "collection time."
     )
+    print("Example after the delay:")
     print(
-        "Example after the delay:\n"
-        f"  python experiments/praeva/spike-001/cpu_evidence.py collect --lag-seconds {args.lag_seconds}"
+        "  python experiments/praeva/spike-001/cpu_evidence.py collect "
+        f"--lag-seconds {args.lag_seconds}"
     )
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Praeva Spike 001 - CPU evidence")
+    parser = argparse.ArgumentParser(
+        description="Praeva Spike 001 - CPU evidence"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    collect_p = sub.add_parser("collect", help="Collect reproducible CPU evidence from Prometheus")
+    collect_p = sub.add_parser(
+        "collect",
+        help="Collect reproducible CPU evidence from Prometheus",
+    )
     collect_p.add_argument("--prometheus-url", default=DEFAULT_PROMETHEUS_URL)
     collect_p.add_argument("--namespace", default=DEFAULT_NAMESPACE)
     collect_p.add_argument("--workload", default=DEFAULT_WORKLOAD)
@@ -479,21 +621,50 @@ def build_parser() -> argparse.ArgumentParser:
     collect_p.add_argument("--pod-regex", default=None)
     collect_p.add_argument("--window", default=DEFAULT_WINDOW)
     collect_p.add_argument("--rate-windows", nargs="+", default=["2m", "5m"])
-    collect_p.add_argument("--evaluation-time", default=None, help="ISO-8601 UTC timestamp, e.g. 2026-10-09T12:30:00Z")
-    collect_p.add_argument("--lag-seconds", type=int, default=DEFAULT_LAG_SECONDS)
+    collect_p.add_argument(
+        "--evaluation-time",
+        default=None,
+        help="ISO-8601 UTC timestamp, e.g. 2026-10-09T12:30:00Z",
+    )
+    collect_p.add_argument(
+        "--lag-seconds",
+        type=int,
+        default=DEFAULT_LAG_SECONDS,
+    )
     collect_p.set_defaults(func=collect)
 
-    load_p = sub.add_parser("load", help="Run one controlled CPU-load round while sampling kubectl top")
+    load_p = sub.add_parser(
+        "load",
+        help="Run one controlled CPU-load round while sampling kubectl top",
+    )
     load_p.add_argument("--api-url", default=DEFAULT_API_URL)
     load_p.add_argument("--namespace", default=DEFAULT_NAMESPACE)
     load_p.add_argument("--workload", default=DEFAULT_WORKLOAD)
-    load_p.add_argument("--duration", type=float, required=True, help="Total round duration in seconds (30 for burst, 600 for sustained)")
-    load_p.add_argument("--call-seconds", type=float, default=30.0, help="Each /simulate/cpu request duration, max 30s")
+    load_p.add_argument(
+        "--duration",
+        type=float,
+        required=True,
+        help="Total round duration in seconds (30 burst, 600 sustained)",
+    )
+    load_p.add_argument(
+        "--call-seconds",
+        type=float,
+        default=30.0,
+        help="Each /simulate/cpu request duration, max 30s",
+    )
     load_p.add_argument("--top-interval", type=float, default=10.0)
-    load_p.add_argument("--collect-delay", type=float, default=180.0, help="Suggested wait before collection, seconds")
-    load_p.add_argument("--lag-seconds", type=int, default=DEFAULT_LAG_SECONDS)
+    load_p.add_argument(
+        "--collect-delay",
+        type=float,
+        default=180.0,
+        help="Suggested wait before collection, seconds",
+    )
+    load_p.add_argument(
+        "--lag-seconds",
+        type=int,
+        default=DEFAULT_LAG_SECONDS,
+    )
     load_p.set_defaults(func=run_load)
-
     return parser
 
 
