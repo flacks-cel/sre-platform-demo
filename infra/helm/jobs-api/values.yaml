@@ -38,10 +38,13 @@ readinessProbe:
   timeoutSeconds: 3
   failureThreshold: 3
 
+# Praeva Spike 002 — Round A baseline.
+# The HPA remains enabled but is pinned to N=3 so the baseline uses
+# the same final pod count as Round B without manual kubectl scaling.
 hpa:
   enabled: true
-  minReplicas: 1
-  maxReplicas: 5
+  minReplicas: 3
+  maxReplicas: 3
   targetCPUUtilizationPercentage: 70
 
 serviceMonitor:
