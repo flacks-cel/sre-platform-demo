@@ -1,7 +1,7 @@
 # Spike 002 — Findings
 
-> Status: **Rodada A concluída e válida; Rodada B pendente.**
-> Este arquivo separa claramente resultados de calibração (não-evidenciais) dos achados de A/B.
+> Status: **concluído.** Rodadas A e B executadas; decisão final registrada.
+> Este arquivo separa claramente calibração (não-evidencial) de evidência produzida por A/B.
 
 ## 1. Calibração — não-evidencial
 
@@ -59,14 +59,13 @@ serviços com requests baratos e startup caro; fazer isso seria extrapolar a evi
 
 Com `maxReplicas=3`, B produz no máximo dois eventos de nascimento no scale-up: 1→2→3.
 
-Tamanho amostral do achado A1/A2: `n=2` pods jovens. Isso é suficiente para caracterizar a natureza
-da evidência, mas não para estimar frequência populacional. Se A1/A2 ficar ambíguo, uma repetição com
-N maior pode ser considerada depois — não antes.
+Tamanho amostral do achado sobre pods jovens: `n=2`. Isso é suficiente para caracterizar o sinal
+observado, mas não para estimar frequência populacional.
 
 ### 2.4 Topologia do lab
 
-Nas calibrações, os pods `jobs-api` foram agendados no mesmo worker. O Spike 002 não pretende inferir
-assimetria entre nodes diferentes a partir deste lab.
+Nas calibrações e nas rodadas A/B, os pods `jobs-api` foram agendados no mesmo worker. O Spike 002 não
+pretende inferir assimetria entre nodes diferentes a partir deste lab.
 
 ## 3. Rodada A — Baseline
 
@@ -104,8 +103,7 @@ Por pod:
 | `jobs-api-849859f688-z6zck` | 25 | 0.1491020848282956 | 100% | 13.73% |
 
 O throttling não foi zero no baseline e deve ser carregado como contexto ao comparar B; ele não
-invalidou A porque a regra de validade é saturação de node/restart/telemetria/carga, e A e B usam a
-mesma carga, limits e `k=3` no steady-state comparável.
+invalidou A porque A e B usam a mesma carga, limits e `k=3` no steady-state comparável.
 
 ### 3.2 Baseline de `span_cost`
 
@@ -147,16 +145,99 @@ adequado para interpretar B.
 
 ## 4. Rodada B — Principal
 
-**Pendente.**
+**Concluída e válida.**
 
-Registrar por fase (`pre-scale`, `scale-up`, `steady-state`) a primeira linha aplicável da matriz
-A1/A2/B/C/D/E/F e a evidência que sustenta o veredito.
+- commit sincronizado: `688caa337545f52bd10af88da468675c4d5ce3b2`;
+- `T0 = 2026-10-13T18:52:37Z`;
+- `T1 = 2026-10-13T19:00:50Z`;
+- k6: `361/361` checks, `http_req_failed=0`, `dropped_iterations=0`;
+- o runner terminou sem acionar invalidação por restart, Pending, Metrics API ou saturação de node;
+- B atingiu `N=3` e produziu `steady-state` com coverage completo.
 
-A comparação deve usar exatamente as faixas da seção 3; elas foram registradas **antes** de B.
+### 4.1 `pre-scale`
+
+O pod maduro `jobs-api-849859f688-z6zck` recebeu a carga concentrada antes do scale-out. Nessa fase:
+
+- coverage = 105%;
+- mediana de `cpu_cost_rate` = `0.359875`, acima da faixa de A;
+- `span_cost = 0.236853`, também acima da faixa de A.
+
+Isso é compatível com a carga ainda concentrada em uma réplica e não é usado como comparação A×B de
+`k=3`.
+
+### 4.2 `scale-up`: sinal de cobertura parcial existe, mas a linha A1 não dispara estritamente
+
+Dois pods nasceram durante o scale-out:
+
+| Pod jovem | idade no início da fase | coverage mediana | coverage no pior ponto de CPU | `cpu_cost_rate` máx. | `span_cost` | `span_cost` vs A |
+|---|---:|---:|---:|---:|---:|---|
+| `jobs-api-849859f688-4b79j` | 33s | 42.5% | 75% | 0.389731 | 0.160402 | dentro |
+| `jobs-api-849859f688-c8nkw` | 33s | 45% | 40% | 0.436635 | 0.158728 | dentro |
+
+Os dois pods jovens exibiram exatamente o **sub-sinal A1-compatible** esperado: `cpu_cost_rate`
+calculado sobre série parcial pôde ultrapassar a faixa madura, enquanto o custo integral real
+(`span_cost`) permaneceu dentro do baseline. Quando atingiram coverage suficiente, suas medianas
+cobertas (`0.164799` e `0.146249`) também ficaram dentro da faixa de A.
+
+Porém, a matriz foi pré-registrada com `cov = coverage do pior pod da fase`. O pior pod por pico de
+CPU/limit no `scale-up` foi o pod maduro `jobs-api-849859f688-z6zck`:
+
+- age no início da fase: `1697s`;
+- coverage: `105%`;
+- `cpu_limit_ratio_max = 17.10%`;
+- mediana `cpu_cost_rate = 0.175536`, dentro do baseline;
+- `span_cost = 0.153723`, dentro do baseline.
+
+Portanto **A1/A2 não são acionadas estritamente para a fase**. A distribuição de requests durante
+`scale-up` foi pré-registrada como de baixo poder e não pode ser usada para promover o resultado para
+C/D. O veredito da fase é `UNKNOWN` pela matriz estrita, com evidência secundária de que coverage
+parcial pode inflar `cpu_cost_rate` de pods jovens.
+
+Consequência importante: **não criar ADR-008 nem ADR-009 a partir desta rodada**. O spike observou o
+mecanismo de artefato, mas não demonstrou que ele corrompeu a seleção do pior pod.
+
+### 4.3 `steady-state`: linha C
+
+No `steady-state`, os três pods estavam com coverage completo e a distribuição pooled foi:
+
+```text
+n = 169
+esperado por pod = 56.33
+faixa 3σ = [37.95, 74.72]
+
+4b79j = 58
+c8nkw = 55
+z6zck = 56
+```
+
+Todos ficaram dentro da faixa.
+
+As medianas cobertas de `cpu_cost_rate` também ficaram dentro do baseline A:
+
+| Pod | coverage mín. | mediana `cpu_cost_rate` | vs baseline A |
+|---|---:|---:|---|
+| `4b79j` | 80% | 0.122243 | dentro |
+| `c8nkw` | 80% | 0.119469 | dentro |
+| `z6zck` | 95% | 0.133173 | dentro |
+
+Logo a primeira linha aplicável da matriz é **C**: distribuição de requests dentro do esperado e
+custo por request dentro do baseline maduro.
 
 ## 5. Decisão final do Spike 002
 
-**Pendente.**
+1. **ADR-003 permanece válida.** No `steady-state`, a evidência por pod/container foi consistente: a
+   distribuição pooled ficou dentro da faixa esperada e o custo por request de todos os pods ficou
+   dentro do baseline A.
+2. O pior pod observado durante `scale-up` **não foi um pod jovem com cobertura parcial**; foi o pod
+   maduro original. Portanto o modo de falha que motivou o spike não foi reproduzido como erro de
+   seleção do pior pod.
+3. Pods jovens **podem** produzir valores locais de `cpu_cost_rate` inflados enquanto a cobertura da
+   janela ainda é parcial. O `span_cost` mostrou que, nesta rodada, esse excesso era artefato de
+   janela e não custo real de startup. Esse sinal deve permanecer visível como diagnóstico de
+   coverage, mas o experimento não justifica ainda um filtro obrigatório de produção.
+4. **ADR-008 e ADR-009 não são criadas.** A matriz pré-registrada não acionou A1 nem A2 estritamente.
+5. Não é necessário um Spike 003 apenas para repetir estas queries. O próximo passo é a primeira
+   fatia determinística de `verify`, carregando coverage, janela de rate e distinção entre evidência
+   histórica e estado live como metadados explícitos.
 
-Só será escrita depois da Rodada B. Nenhuma regra do Praeva será implementada com base apenas na
-calibração ou no baseline A.
+O Spike 002 termina sem recommendation engine, sizing automático ou IA/LLM.
