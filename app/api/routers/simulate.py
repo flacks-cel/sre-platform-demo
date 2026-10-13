@@ -41,7 +41,7 @@ def simulate_cpu(
     ),
 ):
     """
-    Burn CPU for a configurable amount of time.
+    Burn CPU for a configurable amount of wall-clock time.
     Useful for demonstrating Kubernetes HPA based on CPU utilization.
     """
     logger.info("simulated cpu load triggered seconds=%.1f", seconds)
@@ -50,7 +50,6 @@ def simulate_cpu(
     iterations = 0
 
     while time.perf_counter() < end_time:
-        # CPU-intensive floating point work
         math.sqrt(iterations % 10000)
         iterations += 1
 
@@ -59,4 +58,40 @@ def simulate_cpu(
     return {
         "message": f"CPU load generated for {seconds:.1f}s",
         "iterations": iterations,
+    }
+
+
+@router.get("/cpu-work")
+def simulate_cpu_work(
+    iterations: int = Query(
+        default=1_000_000,
+        ge=1_000,
+        le=100_000_000,
+        description="Fixed number of CPU-work iterations",
+    ),
+):
+    """
+    Execute a fixed amount of CPU work.
+
+    Unlike /simulate/cpu, which runs for wall-clock time, this endpoint performs
+    exactly the requested number of loop iterations. It is intended for Praeva
+    experiments where every request must represent the same amount of work even
+    when CPU throttling or contention changes request latency.
+    """
+    logger.info("simulated fixed cpu work triggered iterations=%d", iterations)
+
+    checksum = 0.0
+    for index in range(iterations):
+        checksum += math.sqrt((index % 10000) + 1)
+
+    logger.info(
+        "fixed cpu work finished iterations=%d checksum=%.6f",
+        iterations,
+        checksum,
+    )
+
+    return {
+        "message": "fixed CPU work completed",
+        "iterations": iterations,
+        "checksum": checksum,
     }

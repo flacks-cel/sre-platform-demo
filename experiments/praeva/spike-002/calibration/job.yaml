@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: praeva-calibration
+  namespace: praeva-load
+  labels:
+    component: praeva-calibration
+    experiment: spike-002
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        component: praeva-calibration
+        experiment: spike-002
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:2.3.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - k6
+            - run
+            - /scripts/calibration.js
+          envFrom:
+            - configMapRef:
+                name: praeva-calibration-params
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+      volumes:
+        - name: script
+          configMap:
+            name: praeva-calibration-script
