@@ -100,22 +100,16 @@ def preflight_b(args: argparse.Namespace) -> int:
             if status and status.get("ready") is True:
                 ready_names.add(item["metadata"]["name"])
             if status and int(status.get("restartCount", 0)) != 0:
-                bad_restarts.append(
-                    f"{item['metadata']['name']}={status.get('restartCount')}"
-                )
+                bad_restarts.append(f"{item['metadata']['name']}={status.get('restartCount')}")
 
         if len(pod_names) != 1 or len(ready_names) != 1:
-            reasons.append(
-                f"pods={len(pod_names)} ready={len(ready_names)}, expected=1/1"
-            )
+            reasons.append(f"pods={len(pod_names)} ready={len(ready_names)}, expected=1/1")
         if bad_restarts:
             reasons.append("restarts: " + ", ".join(bad_restarts))
 
         endpoints = eligible_endpoints_live()
         if endpoints != ready_names or len(endpoints) != 1:
-            reasons.append(
-                f"eligible endpoints={len(endpoints)} ready pods={len(ready_names)}"
-            )
+            reasons.append(f"eligible endpoints={len(endpoints)} ready pods={len(ready_names)}")
 
         if scrape_interval() != "15s":
             reasons.append(f"scrape interval={scrape_interval()}, expected=15s")
@@ -174,7 +168,9 @@ def _metric_metadata(series: list[Any], key_label: str) -> dict[str, dict[str, s
     return result
 
 
-def _endpoint_sets(endpoint_series: list[Any], start: float, end: float) -> list[tuple[float, set[str]]]:
+def _endpoint_sets(
+    endpoint_series: list[Any], start: float, end: float
+) -> list[tuple[float, set[str]]]:
     timestamps: set[float] = set()
     for item in endpoint_series:
         timestamps.update(ts for ts, _ in item.values if start <= ts <= end)
@@ -280,9 +276,7 @@ def _phase_summary(
                     if cpu_delta >= 0 and request_delta > 0:
                         span_cost = cpu_delta / request_delta
 
-        restart_values = [
-            value for ts, value in restart_series if phase.start <= ts <= phase.end
-        ]
+        restart_values = [value for ts, value in restart_series if phase.start <= ts <= phase.end]
 
         creation = created.get(pod)
         owner = owners.get(pod, {})
@@ -513,7 +507,9 @@ def collect_b(args: argparse.Namespace) -> int:
             cost_cmp = _compare_to_baseline(float(worst_cost), baseline_cost)
             distribution = steady_report.get("pooled_request_distribution", {})
             within_band = distribution.get("within_band", {})
-            requests_within = bool(within_band) and all(bool(value) for value in within_band.values())
+            requests_within = bool(within_band) and all(
+                bool(value) for value in within_band.values()
+            )
             worst_req_above = False
             high = distribution.get("high")
             if high is not None:
@@ -575,7 +571,9 @@ def collect_b(args: argparse.Namespace) -> int:
         "phases": phase_reports,
         "scale_up_interpretation": scale_interpretation,
         "steady_state_interpretation": steady_interpretation,
-        "comparison_status": "comparable" if reached_n and steady_start is not None else "inconclusive-for-AxB",
+        "comparison_status": "comparable"
+        if reached_n and steady_start is not None
+        else "inconclusive-for-AxB",
     }
 
     if args.output:

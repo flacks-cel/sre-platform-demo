@@ -200,7 +200,14 @@ def last_before(values: list[tuple[float, float]], ts: float) -> tuple[float, fl
 
 def robust_range(values: list[float]) -> dict[str, float | int | None]:
     if not values:
-        return {"n": 0, "median": None, "mad": None, "robust_sigma": None, "low": None, "high": None}
+        return {
+            "n": 0,
+            "median": None,
+            "mad": None,
+            "robust_sigma": None,
+            "low": None,
+            "high": None,
+        }
     median = statistics.median(values)
     mad = statistics.median([abs(value - median) for value in values])
     robust_sigma = 1.4826 * mad
@@ -295,7 +302,9 @@ def coverage_now(base_url: str) -> dict[str, float]:
         'max by (pod) (count_over_time(container_cpu_usage_seconds_total{namespace="app",'
         'pod=~"jobs-api-.*",container="jobs-api",container!="POD"}[5m]))'
     )
-    return {pod: value / expected for pod, value in instant_map(prom_query(base_url, query)).items()}
+    return {
+        pod: value / expected for pod, value in instant_map(prom_query(base_url, query)).items()
+    }
 
 
 def preflight_a(args: argparse.Namespace) -> int:
@@ -311,7 +320,9 @@ def preflight_a(args: argparse.Namespace) -> int:
         if app["sync"] != "Synced" or app["health"] != "Healthy":
             reasons.append(f"ArgoCD {app['sync']}/{app['health']}")
         if app["revision"] != expected_revision:
-            reasons.append(f"ArgoCD revision={app['revision'][:12]} expected={expected_revision[:12]}")
+            reasons.append(
+                f"ArgoCD revision={app['revision'][:12]} expected={expected_revision[:12]}"
+            )
 
         min_rep, max_rep = hpa_bounds()
         if (min_rep, max_rep) != (EXPECTED_N, EXPECTED_N):
@@ -357,7 +368,10 @@ def preflight_a(args: argparse.Namespace) -> int:
         )
         print(f"  HPA min/max={min_rep}/{max_rep}; pods={sorted(pod_names)}")
         print(f"  eligible endpoints={sorted(endpoints)}")
-        print("  coverage=" + ", ".join(f"{pod}:{coverages.get(pod, 0.0):.0%}" for pod in sorted(ready_names)))
+        print(
+            "  coverage="
+            + ", ".join(f"{pod}:{coverages.get(pod, 0.0):.0%}" for pod in sorted(ready_names))
+        )
 
         if not reasons:
             print("PRE-FLIGHT A: PASS")
@@ -371,22 +385,48 @@ def preflight_a(args: argparse.Namespace) -> int:
 
 
 def series_queries() -> dict[str, str]:
-    container_selector = 'namespace="app",pod=~"jobs-api-.*",container="jobs-api",container!="POD"'
-    req_selector = 'namespace="app",pod=~"jobs-api-.*",handler="/simulate/cpu-work",method="GET"'
+    container_selector = (
+        'namespace="app",pod=~"jobs-api-.*",' 'container="jobs-api",container!="POD"'
+    )
+    req_selector = 'namespace="app",pod=~"jobs-api-.*",' 'handler="/simulate/cpu-work",method="GET"'
+
+    cpu_metric = "container_cpu_usage_seconds_total"
+    throttled_metric = "container_cpu_cfs_throttled_periods_total"
+    periods_metric = "container_cpu_cfs_periods_total"
+
     return {
-        "cpu_rate_short": f"sum by (pod) (rate(container_cpu_usage_seconds_total{{{container_selector}}}[{SHORT_WINDOW}]))",
-        "cpu_rate_long": f"sum by (pod) (rate(container_cpu_usage_seconds_total{{{container_selector}}}[{LONG_WINDOW}]))",
-        "request_rate_short": f"sum by (pod) (rate(http_requests_total{{{req_selector}}}[{SHORT_WINDOW}]))",
-        "request_rate_long": f"sum by (pod) (rate(http_requests_total{{{req_selector}}}[{LONG_WINDOW}]))",
-        "coverage_long": f"max by (pod) (count_over_time(container_cpu_usage_seconds_total{{{container_selector}}}[{LONG_WINDOW}]))",
-        "limit_cpu": 'max by (pod) (kube_pod_container_resource_limits{namespace="app",container="jobs-api",resource="cpu"})',
-        "throttle_short": (
-            f"sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{{{container_selector}}}[{SHORT_WINDOW}])) "
-            f"/ sum by (pod) (rate(container_cpu_cfs_periods_total{{{container_selector}}}[{SHORT_WINDOW}]))"
+        "cpu_rate_short": (
+            f"sum by (pod) (rate({cpu_metric}" f"{{{container_selector}}}[{SHORT_WINDOW}]))"
         ),
-        "cpu_counter": f"sum by (pod) (container_cpu_usage_seconds_total{{{container_selector}}})",
-        "request_counter": f"sum by (pod) (http_requests_total{{{req_selector}}})",
-        "restarts": 'max by (pod) (kube_pod_container_status_restarts_total{namespace="app",container="jobs-api",pod=~"jobs-api-.*"})',
+        "cpu_rate_long": (
+            f"sum by (pod) (rate({cpu_metric}" f"{{{container_selector}}}[{LONG_WINDOW}]))"
+        ),
+        "request_rate_short": (
+            "sum by (pod) (rate(http_requests_total" f"{{{req_selector}}}[{SHORT_WINDOW}]))"
+        ),
+        "request_rate_long": (
+            "sum by (pod) (rate(http_requests_total" f"{{{req_selector}}}[{LONG_WINDOW}]))"
+        ),
+        "coverage_long": (
+            "max by (pod) (count_over_time("
+            f"{cpu_metric}{{{container_selector}}}[{LONG_WINDOW}]))"
+        ),
+        "limit_cpu": (
+            "max by (pod) (kube_pod_container_resource_limits{"
+            'namespace="app",container="jobs-api",resource="cpu"})'
+        ),
+        "throttle_short": (
+            f"sum by (pod) (rate({throttled_metric}"
+            f"{{{container_selector}}}[{SHORT_WINDOW}])) "
+            f"/ sum by (pod) (rate({periods_metric}"
+            f"{{{container_selector}}}[{SHORT_WINDOW}]))"
+        ),
+        "cpu_counter": (f"sum by (pod) ({cpu_metric}{{{container_selector}}})"),
+        "request_counter": (f"sum by (pod) (http_requests_total{{{req_selector}}})"),
+        "restarts": (
+            "max by (pod) (kube_pod_container_status_restarts_total{"
+            'namespace="app",container="jobs-api",pod=~"jobs-api-.*"})'
+        ),
     }
 
 
@@ -466,7 +506,9 @@ def collect_a(args: argparse.Namespace) -> int:
                 all_span_costs.append(span_cost)
                 pooled_requests[pod] = request_delta
 
-        restart_values = [value for ts, value in matrices["restarts"].get(pod, []) if analysis_start <= ts <= end]
+        restart_values = [
+            value for ts, value in matrices["restarts"].get(pod, []) if analysis_start <= ts <= end
+        ]
         per_pod[pod] = {
             "cpu_cost_rate_samples": len(cost_samples),
             "cpu_cost_rate_median": statistics.median(cost_samples) if cost_samples else None,
@@ -495,7 +537,9 @@ def collect_a(args: argparse.Namespace) -> int:
                 "sigma": sigma,
                 "low": low,
                 "high": high,
-                "within_band": {pod: low <= value <= high for pod, value in pooled_requests.items()},
+                "within_band": {
+                    pod: low <= value <= high for pod, value in pooled_requests.items()
+                },
             }
         )
 
