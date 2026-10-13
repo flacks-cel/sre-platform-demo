@@ -14,6 +14,7 @@ PROM_LOCAL_PORT="${PROM_LOCAL_PORT:-19091}"
 SAMPLE_SECONDS="15"
 NODE_SATURATION_PCT="90"
 NODE_SATURATION_CONSECUTIVE="2"
+WARMUP_SECONDS="120"
 
 cd "${PROJECT_ROOT}"
 
@@ -79,7 +80,7 @@ echo "N:          3 fixed replicas"
 echo "load:       3 requests / 4s (0.75 RPS)"
 echo "work:       1,000,000 iterations/request"
 echo "duration:   8m"
-echo "warmup:     60s discarded from baseline"
+echo "warmup:     ${WARMUP_SECONDS}s discarded from baseline"
 echo "Prometheus: ${PROM_URL}"
 echo "================================================="
 
@@ -203,7 +204,7 @@ python "${EVIDENCE_PY}" collect-a \
   --prometheus-url "${PROM_URL}" \
   --start "${T0}" \
   --end "${T1}" \
-  --warmup-seconds 60 \
+  --warmup-seconds "${WARMUP_SECONDS}" \
   --output "${EVIDENCE_JSON}"
 
 echo
