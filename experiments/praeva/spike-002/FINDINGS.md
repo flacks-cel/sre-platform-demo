@@ -1,6 +1,6 @@
 # Spike 002 — Findings
 
-> Status: **calibração encerrada; rodadas evidenciais ainda não executadas.**
+> Status: **Rodada A concluída e válida; Rodada B pendente.**
 > Este arquivo separa claramente resultados de calibração (não-evidenciais) dos achados de A/B.
 
 ## 1. Calibração — não-evidencial
@@ -70,20 +70,80 @@ assimetria entre nodes diferentes a partir deste lab.
 
 ## 3. Rodada A — Baseline
 
-**Pendente.**
+**Concluída e válida.**
 
-Registrar aqui, antes de iniciar B:
+- commit sincronizado: `75bfc8daf6db28e7336f29b0f83c77ae6bed96fb`;
+- `T0 = 2026-10-13T18:29:26Z`;
+- `T1 = 2026-10-13T18:37:32Z`;
+- início da análise após warm-up de 120s: `2026-10-13T18:31:26Z`;
+- `N=3` durante toda a rodada;
+- zero restart durante a rodada;
+- zero ponto com CPU limit desconhecido;
+- todos os três pods com coverage acima do piso de 80%;
+- o Job k6 concluiu sem violar os thresholds de erro HTTP ou `dropped_iterations`;
+- nenhuma regra de invalidação do runner foi acionada.
 
-- commit SHA sincronizado;
-- timestamps `T0/T1`;
-- validade da rodada;
-- faixa robusta de `cpu_cost_rate`;
-- faixa robusta de `span_cost`;
-- throttling;
-- node CPU;
-- UNKNOWN count;
-- intervalos transicionais;
-- distribuição pooled do steady-state.
+### 3.1 Baseline de `cpu_cost_rate`
+
+Faixa robusta calculada sobre 75 amostras válidas:
+
+```text
+median       = 0.1491020848282956 CPU-seconds/request
+MAD          = 0.021464094120017208
+robust_sigma = 0.031822665942337514
+low          = 0.053634087001283054
+high         = 0.24457008265530814
+```
+
+Por pod:
+
+| Pod | amostras | mediana `cpu_cost_rate` | coverage mín. | throttling máx. |
+|---|---:|---:|---:|---:|
+| `jobs-api-849859f688-lfmnn` | 25 | 0.14834403238751048 | 105% | 13.24% |
+| `jobs-api-849859f688-sgbd5` | 25 | 0.15203968710191532 | 95% | 21.49% |
+| `jobs-api-849859f688-z6zck` | 25 | 0.1491020848282956 | 100% | 13.73% |
+
+O throttling não foi zero no baseline e deve ser carregado como contexto ao comparar B; ele não
+invalidou A porque a regra de validade é saturação de node/restart/telemetria/carga, e A e B usam a
+mesma carga, limits e `k=3` no steady-state comparável.
+
+### 3.2 Baseline de `span_cost`
+
+```text
+median       = 0.15332043333333333 CPU-seconds/request
+MAD          = 0.005227980128205162
+robust_sigma = 0.007751003338076973
+low          = 0.1300674233191024
+high         = 0.17657344334756425
+```
+
+Por pod:
+
+| Pod | `span_cost` |
+|---|---:|
+| `jobs-api-849859f688-lfmnn` | 0.14633436046511628 |
+| `jobs-api-849859f688-sgbd5` | 0.15854841346153847 |
+| `jobs-api-849859f688-z6zck` | 0.15332043333333333 |
+
+### 3.3 Distribuição de requests no baseline
+
+No span analisado houve `n=280` requests entre `k=3` pods:
+
+```text
+esperado por pod ~= 93.33
+faixa 3σ        ~= [69.67, 117.00]
+```
+
+Contagens observadas:
+
+```text
+lfmnn = 86
+sgbd5 = 104
+z6zck = 90
+```
+
+Todos ficaram dentro da faixa multinomial esperada. Portanto A fornece um baseline maduro e simétrico
+adequado para interpretar B.
 
 ## 4. Rodada B — Principal
 
@@ -92,9 +152,11 @@ Registrar aqui, antes de iniciar B:
 Registrar por fase (`pre-scale`, `scale-up`, `steady-state`) a primeira linha aplicável da matriz
 A1/A2/B/C/D/E/F e a evidência que sustenta o veredito.
 
+A comparação deve usar exatamente as faixas da seção 3; elas foram registradas **antes** de B.
+
 ## 5. Decisão final do Spike 002
 
 **Pendente.**
 
-Só será escrita depois das rodadas A e B. Nenhuma regra do Praeva será implementada com base apenas
-na calibração.
+Só será escrita depois da Rodada B. Nenhuma regra do Praeva será implementada com base apenas na
+calibração ou no baseline A.
