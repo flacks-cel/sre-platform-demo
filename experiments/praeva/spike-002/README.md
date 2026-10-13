@@ -1,6 +1,6 @@
 # Spike 002 — Distribuição da Evidência de CPU sob Carga Concorrente
 
-> Status: **especificação v4.2 — gate evidencial preenchido.**
+> Status: **concluído.** Rodadas evidenciais A e B executadas e interpretadas.
 > Base: `main @ b8bd49c` (pós PR #7, #8 e #9).
 > A calibração é **não-evidencial**. As rodadas evidenciais são A (baseline) e B (principal).
 
@@ -211,8 +211,6 @@ faixa = max(0, mediana - 3 * robust_sigma) .. mediana + 3 * robust_sigma
 
 ## 12. Parâmetros travados
 
-Mudar qualquer parâmetro abaixo invalida a comparação A×B e exige novo gate.
-
 | Parâmetro | Valor | Justificativa |
 |---|---|---|
 | k6 | `grafana/k6:2.3.0` | pinado |
@@ -229,18 +227,14 @@ Mudar qualquer parâmetro abaixo invalida a comparação A×B e exige novo gate.
 | coverage floor | **80%** | ~16/20 amostras na janela longa |
 | erro HTTP | **0%** | qualquer falha contamina |
 | node saturation | **>=90% por 2 coletas consecutivas** | evita falso headroom |
-| baseline `cpu_cost_rate` | preencher após A | antes de B |
-| baseline `span_cost` | preencher após A | antes de B |
 | revisão | SHA registrada por rodada | sincronização exata do ArgoCD |
-
-**Gate aberto.**
 
 ## 13. Limitações pré-registradas
 
 1. `N=3` é teto, não equilíbrio natural; CPU absoluta deve carregar esse contexto.
 2. C/D têm pouco poder no `scale-up`; pooling é permitido só no `steady-state` com `k` constante.
 3. O busy loop pesado pode diluir custo fixo de startup. A1 vale para este workload, não para todos os serviços.
-4. B observa apenas dois pods jovens (`1→2→3`), portanto `n=2` para A1/A2.
+4. B observa apenas dois pods jovens (`1→2→3`), portanto `n=2` para sinais de A1/A2.
 5. O lab tende a agendar os pods do app no mesmo worker; não inferir assimetria entre nodes.
 
 ## 14. Checklist
@@ -258,9 +252,24 @@ Mudar qualquer parâmetro abaixo invalida a comparação A×B e exige novo gate.
 **A/B**
 
 - [x] A configurada por commit (`min=max=3`)
-- [ ] ArgoCD sincronizado no SHA atual
-- [ ] A madura antes de T0
-- [ ] A executada e baseline registrado
-- [ ] B configurada por commit (`min=1,max=3`)
-- [ ] B inicia em `k=1`
-- [ ] B executada e matriz aplicada por fase
+- [x] ArgoCD sincronizado no SHA da Rodada A
+- [x] A madura antes de T0
+- [x] A executada e baseline registrado antes de B
+- [x] B configurada por commit (`min=1,max=3`)
+- [x] B iniciou em `k=1` estável
+- [x] B executada e matriz aplicada por fase
+
+## 15. Resultado
+
+- **Scale-up:** a matriz estrita fica `UNKNOWN`: o pior pod da fase foi o pod maduro, com coverage
+  completa e custo dentro do baseline. Os dois pods jovens mostraram um sub-sinal A1-compatible
+  (rate local inflado com coverage parcial e `span_cost` normal), mas não dominaram a seleção do pior
+  pod. Portanto A1/A2 não são acionadas e não se cria ADR-008/ADR-009.
+- **Steady-state:** **linha C**. As três contagens pooled ficaram dentro da faixa multinomial e as
+  medianas cobertas de `cpu_cost_rate` ficaram dentro do baseline A.
+- **Decisão:** ADR-003 permanece válida. Coverage deve continuar explícita como metadado diagnóstico,
+  mas este spike não justifica ainda um filtro obrigatório de produção.
+- **Próximo passo:** primeira fatia determinística de `verify`; não criar Spike 003 apenas para repetir
+  as mesmas queries.
+
+Os números completos e a justificativa ficam em `FINDINGS.md`.
