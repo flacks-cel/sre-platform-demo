@@ -234,3 +234,37 @@ Before implementation is considered complete, deterministic tests must cover at 
 Verify 001 is complete when it can deterministically produce the historical per-pod CPU evidence set and named selectors above, with explicit `VALID`/`UNKNOWN` semantics and tests for the contract.
 
 Only after that contract is stable should Praeva add a deterministic risk/recommendation rule on top of it.
+
+## 13. CLI / serialization contract
+
+Before adding a Prometheus adapter, Verify 001 freezes a thin CLI around the pure evidence core.
+
+Initial command shape:
+
+```text
+praeva verify cpu --input evidence.json
+```
+
+For this repository slice, the Python entry point may be invoked directly while packaging is deferred, but its semantics must match the command above.
+
+The input file contains normalized evidence for `build_report`; the CLI does not query Prometheus yet.
+
+CLI rules:
+
+- successful execution writes exactly one JSON document to stdout;
+- human progress text must not be mixed into stdout;
+- serialization is deterministic (`sort_keys`/stable formatting);
+- an evidence result containing `UNKNOWN` selectors is still a successful process execution and exits `0`;
+- malformed JSON, unreadable input, or structurally invalid required input exits non-zero;
+- execution errors go to stderr and stdout remains empty;
+- the serialized result must not introduce `worst_pod`, risk levels, recommendations, or sizing targets;
+- the CLI must call the same pure `build_report` core used by unit tests rather than reimplement selector logic.
+
+The normalized file accepted by this slice contains:
+
+- `pods`;
+- `short_window`;
+- `long_window`;
+- optional `live_context`.
+
+Prometheus acquisition and query construction are explicitly deferred to the next adapter slice.
