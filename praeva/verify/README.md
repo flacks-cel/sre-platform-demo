@@ -151,6 +151,10 @@ Allowed values:
 - `VALID`
 - `UNKNOWN`
 
+The top-level status describes whether the base per-pod CPU evidence set was usable enough to build the report. It does **not** mean that every dependent selector is `VALID`.
+
+For example, a report may be top-level `VALID` while `max_cpu_limit_ratio_pod` or `max_cpu_cost_rate_pod` is `UNKNOWN` because the required historical limit or request-rate denominator is missing for a pod still visible in CPU rate evidence.
+
 `UNKNOWN` is required when a dependent result cannot be computed from usable telemetry, including examples such as:
 
 - required series missing;
