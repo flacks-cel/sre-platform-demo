@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from praeva.verify.cpu_evidence import build_report
+from praeva.verify.prometheus_adapter import (
+    PrometheusAdapterError,
+    collect_normalized_evidence,
+)
 
 
 class CliInputError(ValueError):
@@ -21,7 +25,19 @@ def _parser() -> argparse.ArgumentParser:
     verify_commands = verify.add_subparsers(dest="verify_command", required=True)
 
     cpu = verify_commands.add_parser("cpu")
-    cpu.add_argument("--input", required=True, dest="input_path")
+    source = cpu.add_mutually_exclusive_group(required=True)
+    source.add_argument("--input", dest="input_path")
+    source.add_argument("--prometheus-url")
+
+    cpu.add_argument("--namespace")
+    cpu.add_argument("--pod-regex")
+    cpu.add_argument("--container")
+    cpu.add_argument("--start", type=float)
+    cpu.add_argument("--end", type=float)
+    cpu.add_argument("--step", type=float)
+    cpu.add_argument("--short-window")
+    cpu.add_argument("--long-window")
+    cpu.add_argument("--request-rate-query")
 
     return parser
 
@@ -70,6 +86,37 @@ def _run_verify_cpu(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _prometheus_payload(args: argparse.Namespace) -> dict[str, Any]:
+    required = {
+        "namespace": args.namespace,
+        "pod_regex": args.pod_regex,
+        "container": args.container,
+        "start": args.start,
+        "end": args.end,
+        "step": args.step,
+        "short_window": args.short_window,
+        "long_window": args.long_window,
+    }
+    missing = [name.replace("_", "-") for name, value in required.items() if value is None]
+    if missing:
+        raise CliInputError(
+            "Prometheus mode is missing required arguments: " + ", ".join(missing)
+        )
+
+    return collect_normalized_evidence(
+        prometheus_url=args.prometheus_url,
+        namespace=args.namespace,
+        pod_regex=args.pod_regex,
+        container=args.container,
+        start=args.start,
+        end=args.end,
+        step=args.step,
+        short_window=args.short_window,
+        long_window=args.long_window,
+        request_rate_query=args.request_rate_query,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _parser()
 
@@ -79,12 +126,22 @@ def main(argv: list[str] | None = None) -> int:
         return int(exc.code)
 
     try:
-        if args.command == "verify" and args.verify_command == "cpu":
-            payload = _load_payload(args.input_path)
-            report = _run_verify_cpu(payload)
-        else:
+        if args.command != "verify" or args.verify_command != "cpu":
             raise CliInputError("unsupported command")
-    except (CliInputError, KeyError, TypeError, ValueError) as exc:
+
+        if args.input_path is not None:
+            payload = _load_payload(args.input_path)
+        else:
+            payload = _prometheus_payload(args)
+
+        report = _run_verify_cpu(payload)
+    except (
+        CliInputError,
+        PrometheusAdapterError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
