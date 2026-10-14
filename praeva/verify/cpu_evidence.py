@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from typing import Any
-
 
 Status = str
 Point = dict[str, float | int]
@@ -104,13 +101,17 @@ def _max_limit_ratio_selector(pods: list[PodInput], short_window: str) -> dict[s
         if not limit_points:
             return _unknown(f"historical CPU limit missing for pod {pod['name']}")
         if cpu_duplicate or limit_duplicate:
-            return _unknown(f"duplicate timestamp values prevent deterministic join for pod {pod['name']}")
+            return _unknown(
+                "duplicate timestamp values prevent deterministic join "
+                f"for pod {pod['name']}"
+            )
 
         cpu_timestamps = set(cpu_points)
         limit_timestamps = set(limit_points)
         if cpu_timestamps != limit_timestamps:
             return _unknown(
-                f"timestamp alignment between CPU and historical limit is incomplete for pod {pod['name']}"
+                "timestamp alignment between CPU and historical limit "
+                f"is incomplete for pod {pod['name']}"
             )
 
         for timestamp in sorted(cpu_timestamps):
@@ -143,13 +144,17 @@ def _max_cost_rate_selector(pods: list[PodInput], short_window: str) -> dict[str
         if not request_points:
             return _unknown(f"request telemetry missing for pod {pod['name']}")
         if cpu_duplicate or request_duplicate:
-            return _unknown(f"duplicate timestamp values prevent deterministic join for pod {pod['name']}")
+            return _unknown(
+                "duplicate timestamp values prevent deterministic join "
+                f"for pod {pod['name']}"
+            )
 
         cpu_timestamps = set(cpu_points)
         request_timestamps = set(request_points)
         if cpu_timestamps != request_timestamps:
             return _unknown(
-                f"timestamp alignment between CPU and request rate is incomplete for pod {pod['name']}"
+                "timestamp alignment between CPU and request rate is incomplete "
+                f"for pod {pod['name']}"
             )
 
         for timestamp in sorted(cpu_timestamps):
