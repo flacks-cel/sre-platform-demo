@@ -96,6 +96,20 @@ The adapter preserves Prometheus timestamps exactly as returned. It does not nea
 
 Timestamp alignment required by CPU/limit or CPU/request ratios remains the responsibility of the pure evidence core. Misalignment therefore stays visible and can become `UNKNOWN`.
 
+### 6.1 Rate lookback and pod churn
+
+A PromQL expression such as `rate(...[2m])` can still return a value at evaluation time `T` for a recently terminated pod because the rate window reads counter samples from before `T`.
+
+Metadata or request series that are instantaneous at `T` may already have disappeared for that same pod. The adapter must preserve that asymmetry rather than silently drop the pod, copy current metadata, interpolate, or backfill a denominator.
+
+Therefore a recently terminated pod may legitimately have:
+
+- valid short/long CPU rate points;
+- no historical CPU-limit point at the evaluation timestamp;
+- no request-rate point at the evaluation timestamp.
+
+In that case the CPU-usage selector may remain `VALID`, while limit- or request-dependent selectors become `UNKNOWN`. This is expected evidence semantics, not an adapter transport failure.
+
 ## 7. Failure semantics
 
 Transport/API/schema failures are execution failures and raise an adapter error. Examples:
