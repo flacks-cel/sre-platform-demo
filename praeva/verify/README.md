@@ -247,7 +247,7 @@ praeva verify cpu --input evidence.json
 
 For this repository slice, the Python entry point may be invoked directly while packaging is deferred, but its semantics must match the command above.
 
-The input file contains normalized evidence for `build_report`; the CLI does not query Prometheus yet.
+The input file contains normalized evidence for `build_report`; the CLI does not query Prometheus in this initial file-input mode.
 
 CLI rules:
 
@@ -267,4 +267,34 @@ The normalized file accepted by this slice contains:
 - `long_window`;
 - optional `live_context`.
 
-Prometheus acquisition and query construction are explicitly deferred to the next adapter slice.
+## 14. Prometheus-backed CLI mode
+
+After the adapter contract is stable, the same command gains a second acquisition mode:
+
+```text
+praeva verify cpu \
+  --prometheus-url http://localhost:9090 \
+  --namespace app \
+  --pod-regex 'jobs-api-.*' \
+  --container jobs-api \
+  --start 0 \
+  --end 300 \
+  --step 15 \
+  --short-window 2m \
+  --long-window 5m
+```
+
+An optional `--request-rate-query` supplies the explicit PromQL used for `cpu_cost_rate`.
+
+The file-input and Prometheus-backed modes are mutually exclusive. A command must use either `--input` or the complete Prometheus acquisition argument set, never both.
+
+Prometheus-backed CLI rules:
+
+- `start`, `end`, and `step` are parsed as numeric Prometheus query-range values in this slice;
+- all acquisition arguments remain explicit; no lab-specific namespace, pod regex, container, or request query is silently injected;
+- the CLI delegates acquisition to `collect_normalized_evidence()` and then delegates interpretation to the existing pure `build_report()` core;
+- adapter transport/API/schema failures are execution failures: non-zero exit, message on stderr, empty stdout;
+- missing telemetry returned by a successful adapter call remains evidence, not a process failure;
+- `--request-rate-query` is optional and is passed through unchanged when supplied;
+- the existing `--input` behavior remains backward-compatible;
+- this mode still performs no live Kubernetes reads, risk classification, recommendation, sizing target, or automatic change.
