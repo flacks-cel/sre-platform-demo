@@ -7,7 +7,7 @@ class RuleInputError(ValueError):
 
 
 def _validate_ceiling_ratio(value: Any) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise RuleInputError("ceiling_ratio must be a finite positive number")
 
     ratio = float(value)
