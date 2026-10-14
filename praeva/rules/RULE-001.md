@@ -83,16 +83,14 @@ A afirmação `EXCEEDS_CEILING` é existencial: um único witness completo acima
 
 #### 3.3.1 Pré-requisito de evidência do Verify
 
-O output atual do Verify 001 não expõe, para **cada pod**, o status de completude de `cpu/limit`; ele só expõe o selector agregado e o primeiro motivo de `UNKNOWN` encontrado.
-
-RULE-001 não pode reimplementar join temporal ou inferir exclusões a partir de uma string de erro. Antes do GREEN da regra, o Verify deve expor genericamente por pod, no mínimo:
+O Verify expõe genericamente por pod:
 
 - status de `cpu_limit_ratio`: `VALID | UNKNOWN`;
 - `max` e `max_timestamp` quando VALID;
-- razão nomeada quando UNKNOWN (`missing_limit`, `timestamp_misalignment`, `non_positive_limit`, etc.);
+- `reason_code` estruturado quando UNKNOWN;
 - coverage/sample metadata já existente.
 
-Esse enriquecimento pertence ao modelo de evidência, não à regra. Ele deve ser implementado em TDD separado e não altera a semântica da RULE-001.
+RULE-001 consome esse campo. Ela não reimplementa join temporal, não lê `cpu_limit` bruto e não infere exclusões a partir de strings de erro.
 
 ### 3.4 Relação exigida entre selectors
 
@@ -154,6 +152,31 @@ RULE-001 não produz:
 - threshold default de `ceiling_ratio`;
 - threshold de coverage.
 
+### 3.9 Interface pura e ordem de decisão
+
+A implementação vive em `praeva.rules.cpu_limit_ceiling` e expõe:
+
+```python
+evaluate_rule(*, report: dict, ceiling_ratio: float) -> dict
+```
+
+`report` é o output já construído pelo Verify 001. A função é pura: não consulta Prometheus, Kubernetes, arquivos ou rede e não recomputa `cpu/limit` a partir das séries brutas.
+
+`ceiling_ratio` deve ser numérico, finito e estritamente positivo. Valor ausente, booleano, string, `NaN`, infinito ou `<= 0` levanta `RuleInputError`, que é erro de input e não conclusão `UNKNOWN`.
+
+A ordem de decisão é congelada:
+
+1. validar `ceiling_ratio`;
+2. identificar pods com short-window CPU `VALID`;
+3. entre esses pods, separar `cpu_limit_ratio=VALID` e `cpu_limit_ratio=UNKNOWN`;
+4. se não existir pod CPU-observado, retornar `UNKNOWN/no_usable_short_cpu`;
+5. se existir qualquer ratio completo `> θ`, retornar `EXCEEDS_CEILING`; o witness é o maior ratio completo, com desempate determinístico por nome do pod;
+6. se não houver witness e nenhum pod CPU-observado tiver ratio completo, retornar `UNKNOWN/no_complete_cpu_limit_ratio`;
+7. se não houver witness e existir ao menos um pod CPU-observado com ratio `UNKNOWN`, retornar `UNKNOWN/incomplete_cpu_limit_ratio`;
+8. caso contrário, retornar `WITHIN_CEILING`.
+
+O status agregado de `report["status"]` não substitui essas dependências. Em particular, ausência de long-window CPU pode tornar o report agregado `UNKNOWN` sem impedir RULE-001 quando short-window CPU + limit ratio per-pod são suficientes.
+
 ## 4. Output
 
 A regra devolve, no mínimo:
@@ -161,11 +184,11 @@ A regra devolve, no mínimo:
 - `rule_id: RULE-001`;
 - `ceiling_ratio`;
 - `conclusion: WITHIN_CEILING | EXCEEDS_CEILING | UNKNOWN`;
-- razão nomeada quando `UNKNOWN`;
-- selectors consumidos e status de cada um;
-- lista de pods excluídos da avaliação de `cpu/limit`, com razão por pod;
-- witness de exceedance quando existir (`pod`, `ratio`, `timestamp`, `window`);
-- coverage/sample metadata;
+- `reason_code` quando `UNKNOWN`: `no_usable_short_cpu`, `no_complete_cpu_limit_ratio` ou `incomplete_cpu_limit_ratio`;
+- `selectors`: snapshot dos três selectors do Verify, preservando seus status sem exigir convergência;
+- `evaluated_pods`: pods com ratio completo, contendo `pod`, `ratio`, `timestamp`, `window`, `coverage`, `sample_count` e `restart_delta`;
+- `excluded_pods`: pods CPU-observados sem ratio computável, contendo `pod`, `reason_code`, `reason`, `coverage`, `sample_count` e `restart_delta`;
+- `witness`: `null` ou `{pod, ratio, timestamp, window}` para `EXCEEDS_CEILING`;
 - nenhum `worst_pod`.
 
 CLI: JSON puro em stdout. `UNKNOWN` é execução válida e mantém exit code 0. Erro de input/transport/schema permanece non-zero em stderr.
@@ -193,11 +216,11 @@ Os cenários 3 e 4 validam a assimetria lógica central: incompletude bloqueia a
 
 ## 6. Checklist do gate
 
-- [x] Seções 3.1 a 3.8 preenchidas
+- [x] Seções 3.1 a 3.9 preenchidas
 - [x] 3.2 respondida antes de 3.6
 - [x] 3.5 não importa threshold do Spike 002
 - [x] 3.4 não exige convergência artificial entre selectors
 - [x] Contrato commitado
-- [ ] Pré-requisito per-pod do Verify exposto e testado
+- [x] Pré-requisito per-pod do Verify exposto e testado
 - [ ] Testes do plano 5 escritos e falhando (RED)
 - [ ] Primeira linha da implementação da RULE-001 só depois dos itens acima
