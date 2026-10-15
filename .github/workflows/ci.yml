@@ -31,6 +31,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r app/api/requirements.txt
           pip install -r app/api/requirements-dev.txt
+          pip install -r praeva/requirements.txt
 
       - name: Run Ruff
         run: python -m ruff check .

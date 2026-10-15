@@ -63,3 +63,19 @@ An experiment round intended to produce controlled-load evidence is valid only i
 The Spike 001 harness must preflight the Jobs API before starting the round, stop on the first failed load call, return a non-zero exit status, and avoid suggesting follow-up evidence collection for that invalid round.
 
 This rule is about experiment validity, not production risk classification.
+
+## ADR-008 — Declared, effective and observed resource state are distinct domains
+
+**Status:** Accepted
+
+Praeva must keep three resource-state domains explicit and must not silently substitute one for another:
+
+1. **Declared state** — fields present or absent in a rendered Kubernetes manifest before admission. An absent `resources.limits.cpu` or `resources.requests.cpu` field means only that the manifest did not declare that value. It does not imply an effective runtime value.
+2. **Effective admitted state** — the resource values on the Kubernetes object after admission-time mutation such as LimitRange defaults or mutating admission webhooks. This state may differ from the declared manifest.
+3. **Observed historical state** — telemetry about admitted runtime objects at historical evaluation times. In Verify 001, `kube_pod_container_resource_limits` is treated as effective-observed evidence for the admitted Pod/container, not as a copy of the source manifest.
+
+Missing runtime telemetry remains evidence absence and follows ADR-005. By contrast, a field absent from a manifest is a complete fact about the declared state: the field was not declared. The two kinds of absence must not share one semantic value.
+
+A future change-risk join therefore compares different domains by construction: proposed-declared change facts from Change Input versus effective-observed historical evidence from Verify. That join must preserve the distinction rather than pretending both sides are manifest values.
+
+If the current declared resource value differs from the effective-observed historical value for the same workload/container even when no resource change is proposed, Praeva may surface that divergence as evidence of admission-time mutation. This signal is intentionally parked for a later slice and is not part of CHANGE-INPUT-001.
