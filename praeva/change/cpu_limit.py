@@ -67,7 +67,11 @@ def _resource_identity(
     kind = resource.get("kind")
     metadata = resource.get("metadata")
 
-    if not isinstance(api_version, str) or not isinstance(kind, str) or not isinstance(metadata, dict):
+    if (
+        not isinstance(api_version, str)
+        or not isinstance(kind, str)
+        or not isinstance(metadata, dict)
+    ):
         raise ChangeInputError(
             f"{side} manifest contains a non-concrete resource; render it first"
         )
