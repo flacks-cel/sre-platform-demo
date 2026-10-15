@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 CURRENT = "00_current_cases.yaml"
 PROPOSED = "00_proposed_cases.yaml"
