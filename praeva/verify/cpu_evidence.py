@@ -43,6 +43,64 @@ def _series_summary(points: list[Point] | None, window: str) -> dict[str, Any]:
     }
 
 
+def _per_pod_limit_ratio(pod: PodInput, short_window: str) -> dict[str, Any]:
+    cpu_points, cpu_duplicate = _indexed_points(pod.get("cpu_short"))
+    limit_points, limit_duplicate = _indexed_points(pod.get("cpu_limit"))
+
+    if not cpu_points:
+        return {
+            "status": "UNKNOWN",
+            "window": short_window,
+            "reason_code": "missing_cpu",
+            "reason": "short-window CPU telemetry is missing",
+        }
+    if not limit_points:
+        return {
+            "status": "UNKNOWN",
+            "window": short_window,
+            "reason_code": "missing_limit",
+            "reason": "historical CPU limit is missing",
+        }
+    if cpu_duplicate or limit_duplicate:
+        return {
+            "status": "UNKNOWN",
+            "window": short_window,
+            "reason_code": "duplicate_timestamp",
+            "reason": "duplicate timestamp values prevent deterministic CPU/limit join",
+        }
+
+    cpu_timestamps = set(cpu_points)
+    limit_timestamps = set(limit_points)
+    if cpu_timestamps != limit_timestamps:
+        return {
+            "status": "UNKNOWN",
+            "window": short_window,
+            "reason_code": "timestamp_misalignment",
+            "reason": "CPU and historical limit timestamps are not exactly aligned",
+        }
+
+    ratios: list[tuple[float, float | int]] = []
+    for timestamp in sorted(cpu_timestamps):
+        limit = limit_points[timestamp]
+        if limit <= 0:
+            return {
+                "status": "UNKNOWN",
+                "window": short_window,
+                "reason_code": "non_positive_limit",
+                "reason": "historical CPU limit is not positive",
+            }
+        ratios.append((cpu_points[timestamp] / limit, timestamp))
+
+    maximum, max_timestamp = max(ratios, key=lambda item: item[0])
+    return {
+        "status": "VALID",
+        "window": short_window,
+        "max": maximum,
+        "max_timestamp": max_timestamp,
+        "points": len(ratios),
+    }
+
+
 def _selector_result(
     *,
     pod: PodInput,
@@ -208,6 +266,7 @@ def build_report(
                 "short": short_summary,
                 "long": long_summary,
             },
+            "cpu_limit_ratio": _per_pod_limit_ratio(pod, short_window),
         }
 
     report: dict[str, Any] = {
