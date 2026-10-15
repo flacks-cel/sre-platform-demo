@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: list-target
+      namespace: app
+    spec:
+      template:
+        spec:
+          containers:
+            - name: jobs-api
+              image: example/jobs-api:test
+              resources:
+                limits:
+                  cpu: "250m"
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: unrelated
+      namespace: app
+    data:
+      note: ignored
