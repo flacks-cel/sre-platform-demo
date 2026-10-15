@@ -1,6 +1,6 @@
 # RULE-001 — CPU limit ceiling predicate
 
-> Status: **pré-registração commitada; implementação bloqueada até RED.** Base: Verify 001 (PR #11, merge `f9d3338`). Herda ADR-001 a ADR-007. Gate: nenhuma linha da regra é implementada antes dos testes de contrato falharem.
+> Status: **implementação GREEN local; aguardando PR/CI.** Base: Verify 001 (PR #11, merge `f9d3338`). Herda ADR-001 a ADR-007. O gate RED → GREEN foi cumprido antes da implementação.
 
 ## 0. O que este contrato é
 
@@ -222,5 +222,11 @@ Os cenários 3 e 4 validam a assimetria lógica central: incompletude bloqueia a
 - [x] 3.4 não exige convergência artificial entre selectors
 - [x] Contrato commitado
 - [x] Pré-requisito per-pod do Verify exposto e testado
-- [ ] Testes do plano 5 escritos e falhando (RED)
-- [ ] Primeira linha da implementação da RULE-001 só depois dos itens acima
+- [x] Testes do plano 5 escritos e falhando (RED) antes da implementação
+- [x] Primeira linha da implementação da RULE-001 escrita somente depois do RED confirmado
+
+Validação local após GREEN:
+
+- `python -m ruff check .` → passou;
+- `python -m pytest -q` → **63 passed**;
+- working tree clean.
