@@ -1,6 +1,6 @@
 # CHANGE-INPUT-001 — Declared CPU change facts
 
-> Status: **pré-registração commitada; implementação bloqueada até RED.** Gate: nenhuma linha de implementação antes dos testes de contrato falharem. Base: `main @ 0c3a608`. Herda ADR-001 a ADR-008. Não depende do Verify nem do Prometheus. Após o gate: RED → GREEN.
+> Status: **pré-registração v3 commitada; implementação bloqueada até RED.** Gate: nenhuma linha de implementação antes dos testes de contrato falharem. Base: `main @ 0c3a608`. Herda ADR-001 a ADR-008. Não depende do Verify nem do Prometheus. Após o gate: RED → GREEN.
 
 ## 1. Pergunta
 
@@ -113,12 +113,13 @@ Quantidades declaradas de CPU são normalizadas para **milicores inteiros**, usa
 | `"1"` | 1000 |
 | `"1500m"` | 1500 |
 | `"1e3"` | 1000000 |
+| `"0"` ou `"0m"` | 0 |
 
 Precisão mais fina que `1m`, incluindo valores como `"0.0005"` ou `"500u"`, é erro de input. Não há arredondamento silencioso.
 
 Valor negativo, sufixo desconhecido, infinito, NaN ou conteúdo não numérico é erro de input.
 
-Zero CPU declarado é tratado como quantidade inválida para este contrato e produz erro de input; CHANGE-INPUT-001 não usa zero como sinônimo de ausência.
+Zero declarado é preservado como **fato declarado numérico**. Este contrato não afirma o que um limit zero significa depois de admission/runtime. Para `change_ratio`, zero em qualquer extremo torna a razão `UNDEFINED` conforme 6.1.
 
 ## 5. Semântica de ausência declarada
 
@@ -153,8 +154,8 @@ container
 
 current_declared_cpu_limit     milicores | ABSENT
 proposed_declared_cpu_limit    milicores | ABSENT
-limit_change_kind              DECREASE | INCREASE | UNCHANGED | LIMIT_ADDED | LIMIT_REMOVED
-change_ratio                   decimal exato | UNDEFINED
+direction                      DECREASE | INCREASE | UNCHANGED | LIMIT_ADDED | LIMIT_REMOVED
+change_ratio                   {numerator: int, denominator: int} | UNDEFINED
 
 current_declared_cpu_request   milicores | ABSENT
 proposed_declared_cpu_request  milicores | ABSENT
@@ -162,20 +163,44 @@ proposed_declared_cpu_request  milicores | ABSENT
 
 Os requests são fatos auxiliares capturados no mesmo passe de parsing, mas **não participam da decisão de limit deste slice**.
 
-### 6.1 Semântica de limit change
+### 6.1 Semântica de `direction` e `change_ratio`
 
-| Current declarado | Proposed declarado | `limit_change_kind` | `change_ratio` |
+Quando ambos os limits são valores declarados **estritamente positivos**, `change_ratio` representa exatamente:
+
+```text
+proposed_declared_cpu_limit / current_declared_cpu_limit
+```
+
+A representação é uma fração racional estruturada em forma reduzida:
+
+```json
+{"numerator": 1, "denominator": 3}
+```
+
+O denominador é sempre positivo e numerador/denominador são reduzidos pelo MDC. Não existe representação decimal aproximada no contrato.
+
+| Current declarado | Proposed declarado | `direction` | `change_ratio` |
 | --- | --- | --- | --- |
-| 500m | 250m | `DECREASE` | 0.5 |
-| 500m | 1000m | `INCREASE` | 2.0 |
-| 500m | 500m | `UNCHANGED` | 1.0 |
+| 500m | 250m | `DECREASE` | `{numerator: 1, denominator: 2}` |
+| 250m | 500m | `INCREASE` | `{numerator: 2, denominator: 1}` |
+| 300m | 100m | `DECREASE` | `{numerator: 1, denominator: 3}` |
+| 500m | 500m | `UNCHANGED` | `{numerator: 1, denominator: 1}` |
 | `ABSENT` | 500m | `LIMIT_ADDED` | `UNDEFINED` |
 | 500m | `ABSENT` | `LIMIT_REMOVED` | `UNDEFINED` |
 | `ABSENT` | `ABSENT` | `UNCHANGED` | `UNDEFINED` |
+| 0m | 500m | `INCREASE` | `UNDEFINED` |
+| 500m | 0m | `DECREASE` | `UNDEFINED` |
+| 0m | 0m | `UNCHANGED` | `UNDEFINED` |
 
-`change_ratio` só existe quando ambos os extremos são quantidades declaradas numéricas. Sempre que qualquer extremo é `ABSENT`, o ratio é `UNDEFINED` — nunca infinito, zero, `-1` ou outra sentinela numérica.
+`change_ratio` é `UNDEFINED` sempre que qualquer extremo é `ABSENT` **ou zero**. Ele nunca usa infinito, zero, `-1`, `NaN` ou outra sentinela numérica.
 
-### 6.2 `limit_change_kind` não é ordinal
+A orientação `proposed/current` é parte do contrato. Os testes RED incluem o par recíproco 500m → 250m e 250m → 500m justamente para impedir inversão silenciosa.
+
+O campo é deliberadamente heterogêneo: **objeto racional ou a string `"UNDEFINED"`**. A alternativa `{defined: false}` foi rejeitada para não introduzir um segundo vocabulário de ausência num slice que já usa `ABSENT` para campo não declarado e `UNDEFINED` para operação matematicamente não definida.
+
+Uma futura camada de risco deve comparar razões racionais por multiplicação cruzada inteira (`a/b` contra `c/d` => comparar `a*d` com `c*b`) e não reconstruir decimais aproximados.
+
+### 6.2 `direction` não é ordinal
 
 `DECREASE`, `INCREASE`, `UNCHANGED`, `LIMIT_ADDED` e `LIMIT_REMOVED` são categorias sem uma ordenação total compartilhada.
 
@@ -200,14 +225,16 @@ Contrato de CLI alinhado ao Verify 001: JSON puro em stdout; stderr só para err
 
 ## 8. Plano de teste — RED antes de GREEN
 
-Fixtures são **manifestos renderizados versionados no repositório**. Os testes não executam `helm template`, Kustomize, ArgoCD ou qualquer renderer em runtime; isso evita acoplar a suíte à versão dessas ferramentas ou do chart.
+Fixtures positivas são **manifestos renderizados versionados no repositório**. Os testes não executam `helm template`, Kustomize, ArgoCD ou qualquer renderer em runtime; isso evita acoplar a suíte à versão dessas ferramentas ou do chart. Entradas deliberadamente inválidas usadas em testes negativos podem ser versionadas separadamente ou construídas como texto de teste; elas não são tratadas como fixtures renderizados válidos.
+
+O primeiro par de fixtures versionados é deliberadamente 300m → 100m para provar desde o início a representação racional não terminante `{1, 3}`, em vez de validar apenas frações decimais fáceis.
 
 Cada cenário abaixo vira teste de contrato antes da implementação:
 
 | # | Cenário | Esperado |
 | ---: | --- | --- |
-| 1 | 500m → 250m | `DECREASE`, ratio exato `0.5` |
-| 2 | `"0.5"` → `"500m"` | `UNCHANGED`, ratio `1.0` |
+| 1 | 500m → 250m | `DECREASE`, ratio `{1, 2}` |
+| 2 | `"0.5"` → `"500m"` | `UNCHANGED`, ratio `{1, 1}` — normalização equivalente |
 | 3 | limit ausente → 500m | `LIMIT_ADDED`, ratio `UNDEFINED`, current `ABSENT` |
 | 4 | 500m → limit ausente | `LIMIT_REMOVED`, ratio `UNDEFINED` |
 | 5 | Helm/template não renderizado ou campo estrutural não concreto | erro de input mencionando renderização |
@@ -221,9 +248,14 @@ Cada cenário abaixo vira teste de contrato antes da implementação:
 | 13 | multi-documento com dois recursos casando a identidade | erro de input por ambiguidade |
 | 14 | Kubernetes `List` resolve exatamente um Deployment alvo | resultado normal |
 | 15 | namespace ausente no manifesto, mas fornecido explicitamente na seleção | usa contexto explícito; não assume `default` |
-| 16 | `ABSENT` → `ABSENT` | `UNCHANGED`, ratio `UNDEFINED` |
+| 16 | 250m → 500m | `INCREASE`, ratio `{2, 1}`; trava orientação `proposed/current` junto ao cenário 1 |
+| 17 | 300m → 100m | `DECREASE`, ratio reduzido `{1, 3}` |
+| 18 | 0m → 500m | `INCREASE`, ratio `UNDEFINED` |
+| 19 | 500m → 0m | `DECREASE`, ratio `UNDEFINED` |
+| 20 | 0m → 0m | `UNCHANGED`, ratio `UNDEFINED` |
+| 21 | `ABSENT` → `ABSENT` | `UNCHANGED`, ratio `UNDEFINED` |
 
-Os cenários 3, 4, 6, 7 e 13 são particularmente importantes: ausência não vira “unlimited”, ratio indefinido não vira sentinela numérico, sintaxe legítima `$()` não vira falso positivo de template, identidade divergente não vira mudança, e bundles ambíguos não são resolvidos por heurística.
+Os cenários 1, 3, 4, 6, 7, 13, 16 e 17 são particularmente importantes: orientação da razão não pode inverter, ausência não vira “unlimited”, ratio indefinido não vira sentinela numérico, sintaxe legítima `$()` não vira falso positivo de template, identidade divergente não vira mudança, bundles ambíguos não são resolvidos por heurística e uma fração não terminante permanece exata.
 
 ## 9. Decisões fechadas antes do gate
 
@@ -256,13 +288,37 @@ CLI:           praeva change cpu
 
 Não existe descoberta heurística.
 
+### 9.6 Interface pura congelada
+
+A API Python deste slice é:
+
+```python
+analyze_change(
+    *,
+    current_manifest: str,
+    proposed_manifest: str,
+    api_group: str,
+    kind: str,
+    namespace: str,
+    name: str,
+    container: str,
+    container_space: str = "containers",
+) -> dict
+```
+
+A função é pura. Os manifestos entram como texto YAML/JSON já renderizado. Erros de parse/seleção/normalização levantam `ChangeInputError`; eles não retornam `UNKNOWN`.
+
+A CLI `praeva change cpu` é apenas adapter de arquivos/argumentos para esta função e deve preservar JSON puro em stdout em caso de resultado e stderr com exit non-zero em erro de input.
+
 ## 10. Checklist do gate
 
 - [x] Seção 9 resolvida e commitada
 - [x] ADR-008 criada e explícita sobre declared/effective/observed
+- [x] Representação racional e orientação `proposed/current` congeladas antes dos testes
+- [x] Zero declarado preservado como fato; ratio com zero é `UNDEFINED`
 - [x] Nenhum vocabulário de risco aparece no output
 - [x] Nenhuma dependência de Prometheus, cluster ou Verify
 - [x] `proposed_vs_observed` permanece fora deste slice
-- [x] Fixtures serão manifestos renderizados versionados, não gerados em runtime
+- [x] Fixtures positivas serão manifestos renderizados versionados, não gerados em runtime
 - [ ] Testes do plano 8 escritos e **falhando** (RED) antes da primeira linha de implementação
 - [ ] Primeira linha de implementação apenas depois do RED confirmado
