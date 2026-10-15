@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duplicate-target
+  namespace: app
+spec:
+  template:
+    spec:
+      containers:
+        - name: jobs-api
+          image: example/jobs-api:test
+          resources:
+            limits:
+              cpu: "500m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duplicate-target
+  namespace: app
+spec:
+  template:
+    spec:
+      containers:
+        - name: jobs-api
+          image: example/jobs-api:test
+          resources:
+            limits:
+              cpu: "250m"
