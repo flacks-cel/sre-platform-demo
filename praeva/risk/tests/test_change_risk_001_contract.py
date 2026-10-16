@@ -3,7 +3,6 @@ import importlib
 
 import pytest
 
-
 HAZARD_ID = "cpu_limit_insufficiency"
 MARGIN = {"numerator": 11, "denominator": 10}
 
