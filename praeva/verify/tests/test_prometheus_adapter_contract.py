@@ -108,10 +108,14 @@ def test_adapter_normalizes_per_pod_points_and_coverage():
     assert normalized["long_window"] == "5m"
     assert set(pods) == {"worker-a", "worker-b"}
     assert pods["worker-a"]["sample_count"] == 3
-    assert pods["worker-a"]["coverage"] == 1.0
+    assert pods["worker-a"]["coverage"] == {"observed_points": 3, "expected_points": 3}
     assert pods["worker-b"]["sample_count"] == 2
-    assert pods["worker-b"]["coverage"] == pytest.approx(2 / 3)
-    assert pods["worker-a"]["cpu_short"][1] == {"timestamp": 15, "value": 0.5}
+    assert pods["worker-b"]["coverage"] == {"observed_points": 2, "expected_points": 3}
+    assert pods["worker-a"]["cpu_short"][1] == {
+        "timestamp": "15",
+        "value": "0.5",
+        "query_key": "cpu_short",
+    }
     assert pods["worker-a"]["request_rate"] is None
 
 
@@ -133,7 +137,9 @@ def test_adapter_uses_union_of_pods_and_preserves_missing_limit():
     normalized = collect(query_range)
     pods = {pod["name"]: pod for pod in normalized["pods"]}
 
-    assert pods["worker-a"]["cpu_limit"] == [{"timestamp": 0, "value": 1.0}]
+    assert pods["worker-a"]["cpu_limit"] == [
+        {"timestamp": "0", "value": "1", "query_key": "cpu_limit"}
+    ]
     assert pods["worker-b"]["cpu_limit"] is None
 
 
@@ -149,8 +155,8 @@ def test_adapter_preserves_exact_timestamps_without_interpolation():
     normalized = collect(query_range)
     pod = normalized["pods"][0]
 
-    assert [point["timestamp"] for point in pod["cpu_short"]] == [7, 22]
-    assert [point["timestamp"] for point in pod["cpu_limit"]] == [8, 23]
+    assert [point["timestamp"] for point in pod["cpu_short"]] == ["7", "22"]
+    assert [point["timestamp"] for point in pod["cpu_limit"]] == ["8", "23"]
 
 
 def test_adapter_rejects_duplicate_series_for_same_pod_metric():

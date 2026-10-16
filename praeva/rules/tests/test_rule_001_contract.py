@@ -62,10 +62,10 @@ def test_all_complete_and_within_ceiling_returns_within():
         ]
     )
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["rule_id"] == "RULE-001"
-    assert result["ceiling_ratio"] == 0.8
+    assert result["ceiling_ratio"] == "0.8"
     assert result["conclusion"] == "WITHIN_CEILING"
     assert result["excluded_pods"] == []
     assert result["witness"] is None
@@ -80,13 +80,13 @@ def test_complete_exceedance_returns_named_witness():
         ]
     )
 
-    result = evaluate(report, 1.0)
+    result = evaluate(report, "1.0")
 
     assert result["conclusion"] == "EXCEEDS_CEILING"
     assert result["witness"] == {
         "pod": "pod-b",
-        "ratio": 1.8,
-        "timestamp": 10,
+        "ratio": {"numerator": "0.9", "denominator": "0.5"},
+        "timestamp": "10",
         "window": "2m",
     }
 
@@ -99,7 +99,7 @@ def test_churned_missing_limit_blocks_within_when_no_exceedance_witness():
         ]
     )
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["conclusion"] == "UNKNOWN"
     assert result["reason_code"] == "incomplete_cpu_limit_ratio"
@@ -116,7 +116,7 @@ def test_complete_exceedance_survives_other_churned_incomplete_pod():
         ]
     )
 
-    result = evaluate(report, 1.0)
+    result = evaluate(report, "1.0")
 
     assert result["conclusion"] == "EXCEEDS_CEILING"
     assert result["witness"]["pod"] == "witness"
@@ -134,7 +134,7 @@ def test_selector_divergence_does_not_block_rule():
     assert selectors["max_cpu_usage_pod"]["pod"] == "cpu-pod"
     assert selectors["max_cpu_limit_ratio_pod"]["pod"] == "ratio-pod"
 
-    result = evaluate(report, 2.0)
+    result = evaluate(report, "2.0")
 
     assert result["conclusion"] == "WITHIN_CEILING"
 
@@ -145,7 +145,7 @@ def test_unknown_cost_rate_selector_does_not_block_rule():
     )
     assert report["selectors"]["max_cpu_cost_rate_pod"]["status"] == "UNKNOWN"
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["conclusion"] == "WITHIN_CEILING"
     assert result["selectors"]["max_cpu_cost_rate_pod"]["status"] == "UNKNOWN"
@@ -159,7 +159,7 @@ def test_no_complete_cpu_limit_ratio_is_unknown_never_headroom():
         ]
     )
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["conclusion"] == "UNKNOWN"
     assert result["reason_code"] == "no_complete_cpu_limit_ratio"
@@ -178,7 +178,7 @@ def test_timestamp_misalignment_blocks_within_without_exceedance_witness():
         ]
     )
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["conclusion"] == "UNKNOWN"
     assert result["reason_code"] == "incomplete_cpu_limit_ratio"
@@ -197,7 +197,7 @@ def test_restart_is_metadata_and_does_not_block_rule():
         ]
     )
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["conclusion"] == "WITHIN_CEILING"
     assert evaluated_by_name(result, "pod-a")["restart_delta"] == 1
@@ -216,17 +216,17 @@ def test_partial_coverage_is_metadata_when_ratio_is_computable():
         ]
     )
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["conclusion"] == "WITHIN_CEILING"
     evaluated = evaluated_by_name(result, "young-pod")
-    assert evaluated["coverage"] == 0.4
+    assert evaluated["coverage"] == {"observed_points": 4, "expected_points": 10}
     assert evaluated["sample_count"] == 4
 
 
 def test_invalid_ceiling_ratio_is_input_error_not_unknown():
     module = rule_module()
-    invalid_values = [None, "0.8", True, 0, -1.0, float("nan"), float("inf")]
+    invalid_values = [None, True, 0, -1, "0", "-1", "nan", "inf", 0.8]
 
     for value in invalid_values:
         with pytest.raises(module.RuleInputError):
@@ -247,6 +247,6 @@ def test_missing_long_window_does_not_block_when_short_ratio_is_complete():
     assert report["status"] == "UNKNOWN"
     assert report["pods"]["pod-a"]["cpu_limit_ratio"]["status"] == "VALID"
 
-    result = evaluate(report, 0.8)
+    result = evaluate(report, "0.8")
 
     assert result["conclusion"] == "WITHIN_CEILING"

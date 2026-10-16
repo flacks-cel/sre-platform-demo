@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -32,9 +33,9 @@ def _parser() -> argparse.ArgumentParser:
     cpu.add_argument("--namespace")
     cpu.add_argument("--pod-regex")
     cpu.add_argument("--container")
-    cpu.add_argument("--start", type=float)
-    cpu.add_argument("--end", type=float)
-    cpu.add_argument("--step", type=float)
+    cpu.add_argument("--start", type=Decimal)
+    cpu.add_argument("--end", type=Decimal)
+    cpu.add_argument("--step", type=Decimal)
     cpu.add_argument("--short-window")
     cpu.add_argument("--long-window")
     cpu.add_argument("--request-rate-query")
@@ -78,10 +79,20 @@ def _run_verify_cpu(payload: dict[str, Any]) -> dict[str, Any]:
     if live_context is not None and not isinstance(live_context, dict):
         raise CliInputError("live_context must be an object when provided")
 
+    acquisition = payload.get("acquisition")
+    if acquisition is not None and not isinstance(acquisition, dict):
+        raise CliInputError("acquisition must be an object when provided")
+
+    queries = payload.get("queries")
+    if queries is not None and not isinstance(queries, dict):
+        raise CliInputError("queries must be an object when provided")
+
     return build_report(
         pods=payload["pods"],
         short_window=payload["short_window"],
         long_window=payload["long_window"],
+        acquisition=acquisition,
+        queries=queries,
         live_context=live_context,
     )
 
