@@ -1,6 +1,6 @@
 # RISK-VOCABULARY-001 — Contrato de Pré-Registração
 
-> Status: **pré-registração v1 commitada; nenhum rule de risco pode ser escrito antes do gate deste contrato.**
+> Status: **gate estrutural GREEN confirmado; vocabulário pronto para ser consumido pela primeira regra de risco.**
 > Base: `main @ 9a671fd`.
 > Herda ADR-001 a ADR-008.
 > Este contrato define **significado e estrutura**, não limiares.
@@ -11,7 +11,7 @@
 
 Um vocabulário, não uma regra. Ele fixa o que `LOW`, `MEDIUM`, `HIGH` e `CRITICAL` significam, o que nunca podem significar, e o que toda regra precisa carregar junto ao emiti-los.
 
-Nenhuma regra existe ainda. Este documento é escrito antes da primeira para que as categorias não sejam moldadas pelo que a primeira regra conseguir afirmar.
+Nenhuma regra existia quando este documento foi escrito. O vocabulário foi congelado antes da primeira regra para que as categorias não fossem moldadas pelo que a primeira regra conseguir afirmar.
 
 ---
 
@@ -253,8 +253,10 @@ Os invariantes estruturais independentes de regra são testados imediatamente no
 - [x] Seção 11 resolvida e commitada
 - [x] Nenhum limiar, porcentagem ou score numérico normativo definido por este contrato
 - [x] Nenhuma regra escrita antes deste commit
-- [ ] testes estruturais RED escritos
-- [ ] RED confirmado
-- [ ] módulo de vocabulário implementado somente depois do RED
-- [ ] GREEN estrutural confirmado
+- [x] testes estruturais RED escritos
+- [x] RED confirmado (`10 failed, 121 passed`; falhas apenas por módulo ainda inexistente)
+- [x] módulo de vocabulário implementado somente depois do RED
+- [x] GREEN estrutural confirmado localmente (`131 passed`, Ruff verde, working tree clean)
 - [ ] invariantes comportamentais incorporados à suíte da primeira regra antes do GREEN dessa regra
+
+O gate estrutural deste contrato está concluído. A primeira regra de risco pode agora ser pré-registrada, mas não pode atingir GREEN enquanto os invariantes comportamentais aplicáveis acima não estiverem incorporados à suíte da própria regra.
