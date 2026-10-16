@@ -1,5 +1,6 @@
-import pytest
+from fractions import Fraction
 
+import pytest
 
 ABSENT = "ABSENT"
 
@@ -8,8 +9,6 @@ def change_facts(*, current=200, proposed=150, container_space="containers") -> 
     if current == ABSENT or proposed == ABSENT or current == 0 or proposed == 0:
         ratio = "UNDEFINED"
     else:
-        from fractions import Fraction
-
         reduced = Fraction(proposed, current)
         ratio = {"numerator": reduced.numerator, "denominator": reduced.denominator}
 
