@@ -1,6 +1,6 @@
 # CHANGE-RISK-001 — CPU limit insufficiency
 
-> Status: **pré-registração v1 commitada; implementação bloqueada até RED.**
+> Status: **implementação GREEN confirmada; aguardando merge.**
 > Base: `main @ 79ce50a`.
 > Pré-requisitos cumpridos: RISK-VOCABULARY-001, CHANGE-JOIN-001, VERIFY-THROTTLING-001 e CHANGE-JOIN-THROTTLING-001.
 > Hazard fixo deste contrato: `cpu_limit_insufficiency`.
@@ -579,8 +579,9 @@ Antes da implementação, testes devem congelar pelo menos:
 - [x] `NOT_APPLICABLE` permanece fora do vocabulário compartilhado
 - [x] divergência declared×effective conhecida bloqueia classificação
 - [x] nenhuma freshness policy inventada
-- [ ] testes RED escritos
-- [ ] RED confirmado localmente
-- [ ] implementação iniciada somente depois do RED
-- [ ] invariantes comportamentais aplicáveis do RISK-VOCABULARY-001 cobertos
-- [ ] GREEN local + CI
+- [x] testes RED escritos
+- [x] RED confirmado localmente: Ruff passou; `25 failed, 151 passed`
+- [x] implementação iniciada somente depois do RED
+- [x] invariantes comportamentais aplicáveis do RISK-VOCABULARY-001 cobertos
+- [x] GREEN local: Ruff passou; `176 passed`
+- [x] CI #69: Ruff, Pytest e Docker build/push passaram
