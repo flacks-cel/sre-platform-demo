@@ -1,11 +1,10 @@
 # VERIFY-WIRE-001 — Exact Measurement Wire & Provenance
 
-> Status: **RED confirmado; implementação liberada.**
+> Status: **GREEN local + CI; aguardando revisão final do PR #14.**
 > Base: `main @ 7a0a112`.
 > Escopo: Verify 001 + RULE-001 somente onde a mudança de wire exige adaptação.
-> Gate: nenhuma linha de implementação antes dos testes desta pré-registração falharem.
-> RED observado: `10 failed, 94 passed` com Ruff verde antes da implementação.
-> Após o gate: RED → GREEN.
+> Gate RED confirmado antes da implementação: `10 failed, 94 passed`, Ruff verde.
+> GREEN confirmado: `104 passed` localmente no Windows e no CI #47; Ruff verde.
 
 ## 1. Pergunta
 
@@ -15,12 +14,12 @@ Este slice corrige uma garantia que o Verify original nunca prometeu. Não é tr
 
 ## 2. Motivação
 
-A API do Prometheus devolve o valor da amostra como string decimal. O adapter atual converte essa string para `float`; o core converte novamente valores para `float`; RULE-001 também converte o threshold e a razão observada para `float`.
+A API do Prometheus devolve o valor da amostra como string decimal. O adapter atual convertia essa string para `float`; o core convertia novamente valores para `float`; RULE-001 também convertia o threshold e a razão observada para `float`.
 
-Isso cria duas falhas de contrato para o próximo join:
+Isso criava duas falhas de contrato para o próximo join:
 
-1. a representação decimal original pode ser perdida antes de qualquer consumidor posterior;
-2. o JSON do Verify não carrega provenance suficiente para reconstruir acquisition interval, query e origem de cada selector.
+1. a representação decimal original podia ser perdida antes de qualquer consumidor posterior;
+2. o JSON do Verify não carregava provenance suficiente para reconstruir acquisition interval, query e origem de cada selector.
 
 A correção pertence ao upstream que produz a evidência.
 
@@ -74,7 +73,7 @@ Exemplo normalizado:
 
 A string de `value` é preservada lexicalmente quando é uma amostra escolhida diretamente. Nenhum `float(...)` é permitido no caminho de medição.
 
-Para comparação/aritimética interna, o código usa `Decimal` construído **a partir da string**, nunca a partir de `float`.
+Para comparação/aritmética interna, o código usa `Decimal` construído **a partir da string**, nunca a partir de `float`.
 
 ## 5. Timestamps e acquisition interval
 
@@ -272,7 +271,7 @@ Não entram aqui image digest, Git SHA, Deployment revision, node ownership, Rep
 
 ## 13. Plano RED
 
-Antes da primeira linha de implementação, os testes devem congelar:
+Antes da primeira linha de implementação, os testes congelaram:
 
 | # | Cenário | Esperado |
 |---:|---|---|
@@ -305,3 +304,17 @@ Os testes 1, 5, 9 e 13 são os load-bearing: eles provam que a exatidão sobrevi
 - [x] Ownership continua fora de escopo
 - [x] Testes RED escritos e falhando antes da implementação
 - [x] Nenhuma implementação antes do RED confirmado
+- [x] GREEN local no Windows: Ruff verde, `104 passed`
+- [x] CI #47: Ruff verde, `104 passed`, Docker build/push verde
+
+## 15. Relação com contratos anteriores
+
+Este documento **não reescreve retroativamente** os contratos pré-registrados anteriores. Onde houver conflito puramente de representação, `VERIFY-WIRE-001` é o contrato mais novo e substitui somente o wire antigo.
+
+Em particular:
+
+- `PROMETHEUS_ADAPTER.md`: exemplos antigos com JSON number/`float` e coverage fracionário continuam como registro histórico da versão anterior; o wire atual usa strings decimais, provenance e contagens exatas de coverage definidos aqui;
+- `PER_POD_LIMIT_RATIO.md`: a semântica de join e os `reason_code` anteriores permanecem; apenas a representação do ratio passa de número calculado para `{numerator, denominator}` exato e timestamps passam para texto decimal canônico;
+- `RULE-001.md`: as conclusões e a lógica de completude parcial permanecem; a interface normativa de `ceiling_ratio` e a comparação numérica são substituídas pela seção 9 deste documento.
+
+Nenhum desses supersessions introduz risk vocabulary, recommendation, ownership verificado ou policy de freshness.
