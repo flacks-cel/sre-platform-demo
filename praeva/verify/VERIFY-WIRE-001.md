@@ -1,9 +1,10 @@
 # VERIFY-WIRE-001 — Exact Measurement Wire & Provenance
 
-> Status: **pré-registração fechada; implementação bloqueada até RED.**
+> Status: **RED confirmado; implementação liberada.**
 > Base: `main @ 7a0a112`.
 > Escopo: Verify 001 + RULE-001 somente onde a mudança de wire exige adaptação.
 > Gate: nenhuma linha de implementação antes dos testes desta pré-registração falharem.
+> RED observado: `10 failed, 94 passed` com Ruff verde antes da implementação.
 > Após o gate: RED → GREEN.
 
 ## 1. Pergunta
@@ -302,5 +303,5 @@ Os testes 1, 5, 9 e 13 são os load-bearing: eles provam que a exatidão sobrevi
 - [x] Valores especiais têm semântica UNKNOWN por dependência
 - [x] Provenance possui cerca explícita
 - [x] Ownership continua fora de escopo
-- [ ] Testes RED escritos e falhando antes da implementação
-- [ ] Nenhuma implementação antes do RED confirmado
+- [x] Testes RED escritos e falhando antes da implementação
+- [x] Nenhuma implementação antes do RED confirmado
