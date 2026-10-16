@@ -4,6 +4,7 @@ import json
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
@@ -12,34 +13,75 @@ class PrometheusAdapterError(RuntimeError):
 
 
 QueryRange = Callable[..., dict[str, Any]]
-Point = dict[str, float | int]
+Point = dict[str, str]
+TemporalValue = str | int | Decimal
 
 
 def _escape_label_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _decimal(value: Any, *, field: str) -> Decimal:
+    if isinstance(value, bool) or isinstance(value, float):
+        raise PrometheusAdapterError(f"{field} must not be represented as float")
+    if isinstance(value, Decimal):
+        decimal_value = value
+    elif isinstance(value, int):
+        decimal_value = Decimal(value)
+    elif isinstance(value, str):
+        try:
+            decimal_value = Decimal(value)
+        except InvalidOperation as exc:
+            raise PrometheusAdapterError(f"{field} must be numeric") from exc
+    else:
+        raise PrometheusAdapterError(f"{field} must be numeric")
+
+    if not decimal_value.is_finite():
+        raise PrometheusAdapterError(f"{field} must be finite")
+    return decimal_value
+
+
+def _canonical_decimal(value: Any, *, field: str) -> str:
+    decimal_value = _decimal(value, field=field)
+    text = format(decimal_value, "f")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    if text in {"", "-0"}:
+        return "0"
+    return text
+
+
+def _validate_measurement(raw_value: Any) -> str:
+    if not isinstance(raw_value, str):
+        raise PrometheusAdapterError("Prometheus sample value must be a decimal string")
+    try:
+        Decimal(raw_value)
+    except InvalidOperation as exc:
+        raise PrometheusAdapterError("Prometheus sample value must be numeric") from exc
+    return raw_value
+
+
 def _default_query_range(
     *,
     prometheus_url: str,
     query: str,
-    start: float | int,
-    end: float | int,
-    step: float | int,
+    start: TemporalValue,
+    end: TemporalValue,
+    step: TemporalValue,
 ) -> dict[str, Any]:
     params = urllib.parse.urlencode(
         {
             "query": query,
-            "start": start,
-            "end": end,
-            "step": step,
+            "start": _canonical_decimal(start, field="start"),
+            "end": _canonical_decimal(end, field="end"),
+            "step": _canonical_decimal(step, field="step"),
         }
     )
     url = f"{prometheus_url.rstrip('/')}/api/v1/query_range?{params}"
 
     try:
         with urllib.request.urlopen(url, timeout=15) as response:
-            return json.load(response)
+            return json.load(response, parse_float=Decimal)
     except Exception as exc:  # pragma: no cover - transport depends on runtime
         raise PrometheusAdapterError(f"Prometheus request failed: {exc}") from exc
 
@@ -49,9 +91,9 @@ def _query_range(
     *,
     prometheus_url: str,
     query: str,
-    start: float | int,
-    end: float | int,
-    step: float | int,
+    start: TemporalValue,
+    end: TemporalValue,
+    step: TemporalValue,
 ) -> dict[str, Any]:
     try:
         payload = query_range(
@@ -81,7 +123,12 @@ def _query_range(
     return payload
 
 
-def _parse_matrix(payload: dict[str, Any], *, metric_name: str) -> dict[str, list[Point]]:
+def _parse_matrix(
+    payload: dict[str, Any],
+    *,
+    metric_name: str,
+    query_key: str,
+) -> dict[str, list[Point]]:
     data = payload["data"]
     result = data.get("result")
     if not isinstance(result, list):
@@ -110,25 +157,30 @@ def _parse_matrix(payload: dict[str, Any], *, metric_name: str) -> dict[str, lis
             if not isinstance(sample, list) or len(sample) != 2:
                 raise PrometheusAdapterError("Prometheus matrix sample is malformed")
             timestamp, raw_value = sample
-            if not isinstance(timestamp, int | float):
-                raise PrometheusAdapterError("Prometheus sample timestamp must be numeric")
-            try:
-                value = float(raw_value)
-            except (TypeError, ValueError) as exc:
-                raise PrometheusAdapterError("Prometheus sample value must be numeric") from exc
-            points.append({"timestamp": timestamp, "value": value})
+            timestamp_text = _canonical_decimal(timestamp, field="Prometheus sample timestamp")
+            value_text = _validate_measurement(raw_value)
+            points.append(
+                {
+                    "timestamp": timestamp_text,
+                    "value": value_text,
+                    "query_key": query_key,
+                }
+            )
 
         per_pod[pod] = points
 
     return per_pod
 
 
-def _expected_points(start: float | int, end: float | int, step: float | int) -> int:
-    if step <= 0:
+def _expected_points(start: TemporalValue, end: TemporalValue, step: TemporalValue) -> int:
+    start_value = _decimal(start, field="start")
+    end_value = _decimal(end, field="end")
+    step_value = _decimal(step, field="step")
+    if step_value <= 0:
         raise PrometheusAdapterError("query_range step must be positive")
-    if end < start:
+    if end_value < start_value:
         raise PrometheusAdapterError("query_range end must not be before start")
-    return int((end - start) // step) + 1
+    return int((end_value - start_value) // step_value) + 1
 
 
 def collect_normalized_evidence(
@@ -137,9 +189,9 @@ def collect_normalized_evidence(
     namespace: str,
     pod_regex: str,
     container: str,
-    start: float | int,
-    end: float | int,
-    step: float | int,
+    start: TemporalValue,
+    end: TemporalValue,
+    step: TemporalValue,
     short_window: str,
     long_window: str,
     request_rate_query: str | None = None,
@@ -180,14 +232,40 @@ def collect_normalized_evidence(
     long_payload = _query_range(runner, query=long_query, **common)
     limit_payload = _query_range(runner, query=limit_query, **common)
 
-    short_by_pod = _parse_matrix(short_payload, metric_name="cpu_short")
-    long_by_pod = _parse_matrix(long_payload, metric_name="cpu_long")
-    limit_by_pod = _parse_matrix(limit_payload, metric_name="cpu_limit")
+    short_by_pod = _parse_matrix(
+        short_payload,
+        metric_name="cpu_short",
+        query_key="cpu_short",
+    )
+    long_by_pod = _parse_matrix(
+        long_payload,
+        metric_name="cpu_long",
+        query_key="cpu_long",
+    )
+    limit_by_pod = _parse_matrix(
+        limit_payload,
+        metric_name="cpu_limit",
+        query_key="cpu_limit",
+    )
+
+    queries: dict[str, dict[str, str | None]] = {
+        "cpu_short": {"promql": short_query, "rate_window": short_window},
+        "cpu_long": {"promql": long_query, "rate_window": long_window},
+        "cpu_limit": {"promql": limit_query, "rate_window": None},
+    }
 
     request_by_pod: dict[str, list[Point]] = {}
     if request_rate_query is not None:
         request_payload = _query_range(runner, query=request_rate_query, **common)
-        request_by_pod = _parse_matrix(request_payload, metric_name="request_rate")
+        request_by_pod = _parse_matrix(
+            request_payload,
+            metric_name="request_rate",
+            query_key="request_rate",
+        )
+        queries["request_rate"] = {
+            "promql": request_rate_query,
+            "rate_window": None,
+        }
 
     pod_names = sorted(
         set(short_by_pod)
@@ -211,7 +289,10 @@ def collect_normalized_evidence(
                     request_by_pod.get(pod_name) if request_rate_query is not None else None
                 ),
                 "sample_count": sample_count,
-                "coverage": sample_count / expected,
+                "coverage": {
+                    "observed_points": sample_count,
+                    "expected_points": expected,
+                },
                 "restart_delta": 0,
                 "node": None,
                 "owner": None,
@@ -222,4 +303,13 @@ def collect_normalized_evidence(
         "pods": pods,
         "short_window": short_window,
         "long_window": long_window,
+        "acquisition": {
+            "namespace": namespace,
+            "pod_selector": {"type": "regex", "value": pod_regex},
+            "container": container,
+            "start": _canonical_decimal(start, field="start"),
+            "end": _canonical_decimal(end, field="end"),
+            "step": _canonical_decimal(step, field="step"),
+        },
+        "queries": queries,
     }
