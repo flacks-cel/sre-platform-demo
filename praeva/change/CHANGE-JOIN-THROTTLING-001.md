@@ -1,8 +1,10 @@
 # CHANGE-JOIN-THROTTLING-001 — Propagate CFS censorship evidence
 
-> Status: **pré-registração v1 commitada; implementação bloqueada até RED.**
+> Status: **GREEN confirmado localmente e no CI; pronto para revisão final.**
 > Base: `main @ cf39169`.
 > Pré-requisito: `VERIFY-THROTTLING-001` mergeado no PR #17.
+> RED confirmado antes da implementação: Ruff verde, `10 failed, 141 passed`.
+> GREEN confirmado: Ruff verde, `151 passed` localmente no Windows e CI #60 concluído com sucesso.
 > Este slice estende factual e aditivamente o CHANGE-JOIN-001; não classifica risco.
 
 ---
@@ -225,7 +227,7 @@ A aquisição automática/flag de CLI pode ser integrada no caminho de produto d
 
 ## 12. Plano RED
 
-Antes da implementação, os testes congelam pelo menos:
+Antes da implementação, os testes congelaram:
 
 1. report sem throttling adquirido produz `UNKNOWN(throttling_not_acquired)` em short e long sem alterar CPU/comparison;
 2. zero completo `VALID` é preservado com `any_positive=false`;
@@ -245,7 +247,8 @@ Antes da implementação, os testes congelam pelo menos:
 - [x] VERIFY-THROTTLING-001 mergeado
 - [x] contrato commitado antes da implementação
 - [x] testes RED escritos
-- [ ] RED confirmado localmente
-- [ ] implementação iniciada somente depois do RED
-- [ ] GREEN com todos os testes anteriores preservados
-- [ ] nenhuma regra de risco implementada neste slice
+- [x] RED confirmado localmente: Ruff verde, `10 failed, 141 passed`
+- [x] implementação iniciada somente depois do RED
+- [x] GREEN com todos os testes anteriores preservados: Ruff verde, `151 passed`
+- [x] CI #60 concluído com sucesso
+- [x] nenhuma regra de risco implementada neste slice
