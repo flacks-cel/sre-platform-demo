@@ -43,7 +43,8 @@ def _canonical_decimal(value: Any, *, field: str) -> str:
 
 
 def _millicores_from_cores(value: Any, *, field: str) -> str:
-    return _canonical_decimal(_decimal(value, field=field) * Decimal(1000), field=field)
+    millicores = _decimal(value, field=field) * Decimal(1000)
+    return _canonical_decimal(millicores, field=field)
 
 
 def _declared_limit_text(value: Any, *, field: str) -> str:
@@ -89,7 +90,7 @@ def _validate_inputs(
     pods = _require_mapping(report.get("pods"), field="pods")
 
     namespace = _require_text(workload.get("namespace"), field="workload_identity.namespace")
-    workload_name = _require_text(workload.get("name"), field="workload_identity.name")
+    _require_text(workload.get("name"), field="workload_identity.name")
     _require_text(workload.get("group"), field="workload_identity.group")
     _require_text(workload.get("kind"), field="workload_identity.kind")
 
@@ -98,16 +99,29 @@ def _validate_inputs(
     if container_space != "containers":
         raise ChangeJoinInputError("CHANGE-JOIN-001 supports only container.space=containers")
 
-    verify_namespace = _require_text(acquisition.get("namespace"), field="acquisition.namespace")
-    verify_container = _require_text(acquisition.get("container"), field="acquisition.container")
-    pod_selector = _require_mapping(acquisition.get("pod_selector"), field="acquisition.pod_selector")
+    verify_namespace = _require_text(
+        acquisition.get("namespace"),
+        field="acquisition.namespace",
+    )
+    verify_container = _require_text(
+        acquisition.get("container"),
+        field="acquisition.container",
+    )
+    pod_selector = _require_mapping(
+        acquisition.get("pod_selector"),
+        field="acquisition.pod_selector",
+    )
     _require_text(pod_selector.get("type"), field="acquisition.pod_selector.type")
     _require_text(pod_selector.get("value"), field="acquisition.pod_selector.value")
 
     if namespace != verify_namespace:
-        raise ChangeJoinInputError("Change Input namespace does not match Verify acquisition namespace")
+        raise ChangeJoinInputError(
+            "Change Input namespace does not match Verify acquisition namespace"
+        )
     if container_name != verify_container:
-        raise ChangeJoinInputError("Change Input container does not match Verify acquisition container")
+        raise ChangeJoinInputError(
+            "Change Input container does not match Verify acquisition container"
+        )
 
     for key in ("start", "end", "step"):
         value = acquisition.get(key)
@@ -117,7 +131,6 @@ def _validate_inputs(
 
     short_window = _require_text(windows.get("short"), field="windows.short")
     long_window = _require_text(windows.get("long"), field="windows.long")
-
     for query_key, expected_window in (
         ("cpu_short", short_window),
         ("cpu_long", long_window),
@@ -142,9 +155,6 @@ def _validate_inputs(
         change_map.get("proposed_declared_cpu_limit"),
         field="proposed_declared_cpu_limit",
     )
-
-    if not workload_name:
-        raise ChangeJoinInputError("workload name is required")
 
     return workload, container, acquisition, queries, pods
 
@@ -174,10 +184,7 @@ def _observed_cpu(summary: Any, *, rate_window: str) -> dict[str, Any]:
         }
 
     if status == "UNKNOWN":
-        result: dict[str, Any] = {
-            "status": "UNKNOWN",
-            "rate_window": rate_window,
-        }
+        result: dict[str, Any] = {"status": "UNKNOWN", "rate_window": rate_window}
         if "reason_code" in summary_map:
             result["reason_code"] = summary_map["reason_code"]
         if "reason" in summary_map:
@@ -238,8 +245,13 @@ def _effective_limit_witness(pod_report: dict[str, Any]) -> dict[str, Any]:
             raise ChangeJoinInputError("cpu_limit_ratio denominator must be exact decimal text")
         timestamp = ratio.get("max_timestamp")
         if not isinstance(timestamp, str):
-            raise ChangeJoinInputError("cpu_limit_ratio max_timestamp must be exact decimal text")
-        query_keys = _require_mapping(ratio.get("query_keys"), field="cpu_limit_ratio.query_keys")
+            raise ChangeJoinInputError(
+                "cpu_limit_ratio max_timestamp must be exact decimal text"
+            )
+        query_keys = _require_mapping(
+            ratio.get("query_keys"),
+            field="cpu_limit_ratio.query_keys",
+        )
         query_key = query_keys.get("denominator")
         if not isinstance(query_key, str) or not query_key:
             raise ChangeJoinInputError("cpu_limit_ratio denominator query_key is required")
@@ -355,7 +367,7 @@ def join_change_evidence(
 ) -> dict:
     """Join declared CPU change facts with exact historical Verify evidence."""
 
-    workload, container, acquisition, queries, pods = _validate_inputs(
+    workload, _container, acquisition, queries, pods = _validate_inputs(
         change=change,
         verify_report=verify_report,
         identity_assertion=identity_assertion,
