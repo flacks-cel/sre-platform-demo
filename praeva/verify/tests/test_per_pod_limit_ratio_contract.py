@@ -1,15 +1,15 @@
 from praeva.verify.cpu_evidence import build_report
 
 
-def point(timestamp: int, value: float) -> dict[str, float | int]:
+def point(timestamp: int, value: str) -> dict[str, str | int]:
     return {"timestamp": timestamp, "value": value}
 
 
 def pod(
     name: str,
     *,
-    cpu_short: list[dict[str, float | int]],
-    cpu_limit: list[dict[str, float | int]] | None,
+    cpu_short: list[dict[str, str | int]],
+    cpu_limit: list[dict[str, str | int]] | None,
 ) -> dict:
     return {
         "name": name,
@@ -18,7 +18,10 @@ def pod(
         "cpu_limit": cpu_limit,
         "request_rate": None,
         "sample_count": len(cpu_short),
-        "coverage": 1.0,
+        "coverage": {
+            "observed_points": len(cpu_short),
+            "expected_points": len(cpu_short),
+        },
         "restart_delta": 0,
         "node": "worker-1",
         "owner": "rs-a",
@@ -34,8 +37,8 @@ def test_per_pod_limit_ratio_valid_reports_max_timestamp_window_and_points():
         [
             pod(
                 "pod-a",
-                cpu_short=[point(10, 0.2), point(20, 0.6), point(30, 0.4)],
-                cpu_limit=[point(10, 1.0), point(20, 0.5), point(30, 1.0)],
+                cpu_short=[point(10, "0.2"), point(20, "0.6"), point(30, "0.4")],
+                cpu_limit=[point(10, "1.0"), point(20, "0.5"), point(30, "1.0")],
             )
         ]
     )
@@ -44,8 +47,9 @@ def test_per_pod_limit_ratio_valid_reports_max_timestamp_window_and_points():
     assert ratio == {
         "status": "VALID",
         "window": "2m",
-        "max": 1.2,
-        "max_timestamp": 20,
+        "max": {"numerator": "0.6", "denominator": "0.5"},
+        "max_timestamp": "20",
+        "query_keys": {"numerator": "cpu_short", "denominator": "cpu_limit"},
         "points": 3,
     }
 
@@ -55,12 +59,12 @@ def test_missing_limit_is_structured_per_pod_without_hiding_valid_peer():
         [
             pod(
                 "complete",
-                cpu_short=[point(10, 0.4)],
-                cpu_limit=[point(10, 1.0)],
+                cpu_short=[point(10, "0.4")],
+                cpu_limit=[point(10, "1.0")],
             ),
             pod(
                 "churned",
-                cpu_short=[point(10, 0.7)],
+                cpu_short=[point(10, "0.7")],
                 cpu_limit=None,
             ),
         ]
@@ -80,8 +84,8 @@ def test_timestamp_misalignment_has_structured_reason_code():
         [
             pod(
                 "pod-a",
-                cpu_short=[point(10, 0.4), point(20, 0.5)],
-                cpu_limit=[point(10, 1.0), point(30, 1.0)],
+                cpu_short=[point(10, "0.4"), point(20, "0.5")],
+                cpu_limit=[point(10, "1.0"), point(30, "1.0")],
             )
         ]
     )
@@ -96,8 +100,8 @@ def test_non_positive_limit_has_structured_reason_code():
         [
             pod(
                 "pod-a",
-                cpu_short=[point(10, 0.4)],
-                cpu_limit=[point(10, 0.0)],
+                cpu_short=[point(10, "0.4")],
+                cpu_limit=[point(10, "0.0")],
             )
         ]
     )
@@ -112,8 +116,8 @@ def test_duplicate_timestamp_has_structured_reason_code():
         [
             pod(
                 "pod-a",
-                cpu_short=[point(10, 0.4), point(10, 0.5)],
-                cpu_limit=[point(10, 1.0)],
+                cpu_short=[point(10, "0.4"), point(10, "0.5")],
+                cpu_limit=[point(10, "1.0")],
             )
         ]
     )
@@ -128,12 +132,12 @@ def test_per_pod_visibility_does_not_change_existing_aggregate_selector_semantic
         [
             pod(
                 "complete",
-                cpu_short=[point(10, 0.4)],
-                cpu_limit=[point(10, 1.0)],
+                cpu_short=[point(10, "0.4")],
+                cpu_limit=[point(10, "1.0")],
             ),
             pod(
                 "churned",
-                cpu_short=[point(10, 0.8)],
+                cpu_short=[point(10, "0.8")],
                 cpu_limit=None,
             ),
         ]
