@@ -82,14 +82,20 @@ def _validate_inputs(
 
     change_map = _require_mapping(change, field="change")
     report = _require_mapping(verify_report, field="verify_report")
-    workload = _require_mapping(change_map.get("workload_identity"), field="workload_identity")
+    workload = _require_mapping(
+        change_map.get("workload_identity"),
+        field="workload_identity",
+    )
     container = _require_mapping(change_map.get("container"), field="container")
     acquisition = _require_mapping(report.get("acquisition"), field="acquisition")
     queries = _require_mapping(report.get("queries"), field="queries")
     windows = _require_mapping(report.get("windows"), field="windows")
     pods = _require_mapping(report.get("pods"), field="pods")
 
-    namespace = _require_text(workload.get("namespace"), field="workload_identity.namespace")
+    namespace = _require_text(
+        workload.get("namespace"),
+        field="workload_identity.namespace",
+    )
     _require_text(workload.get("name"), field="workload_identity.name")
     _require_text(workload.get("group"), field="workload_identity.group")
     _require_text(workload.get("kind"), field="workload_identity.kind")
@@ -234,6 +240,141 @@ def _comparison(*, observed_cpu: dict[str, Any], proposed_limit: Any) -> dict[st
     }
 
 
+def _coverage(value: Any, *, field: str) -> dict[str, int] | None:
+    if value is None:
+        return None
+    coverage = _require_mapping(value, field=field)
+    observed = coverage.get("observed_points")
+    expected = coverage.get("expected_points")
+    if (
+        isinstance(observed, bool)
+        or not isinstance(observed, int)
+        or isinstance(expected, bool)
+        or not isinstance(expected, int)
+    ):
+        raise ChangeJoinInputError(f"{field} point counts must be integers")
+    if observed < 0 or expected < 0:
+        raise ChangeJoinInputError(f"{field} point counts must be non-negative")
+    return {"observed_points": observed, "expected_points": expected}
+
+
+def _throttling_not_acquired(*, rate_window: str) -> dict[str, Any]:
+    return {
+        "status": "UNKNOWN",
+        "reason_code": "throttling_not_acquired",
+        "reason": "CFS throttling evidence was not acquired",
+        "rate_window": rate_window,
+    }
+
+
+def _throttling_summary(
+    *,
+    pod: dict[str, Any],
+    queries: dict[str, Any],
+    window_name: str,
+    rate_window: str,
+) -> dict[str, Any]:
+    throttling = pod.get("cfs_throttling")
+    if throttling is None:
+        return _throttling_not_acquired(rate_window=rate_window)
+
+    throttling_map = _require_mapping(throttling, field="pod.cfs_throttling")
+    summary = _require_mapping(
+        throttling_map.get(window_name),
+        field=f"pod.cfs_throttling.{window_name}",
+    )
+    query_key = f"cfs_throttled_{window_name}"
+    query = _require_mapping(queries.get(query_key), field=f"queries.{query_key}")
+    _require_text(query.get("promql"), field=f"queries.{query_key}.promql")
+    if query.get("rate_window") != rate_window:
+        raise ChangeJoinInputError(
+            f"queries.{query_key}.rate_window does not match report window"
+        )
+
+    if summary.get("window") != rate_window:
+        raise ChangeJoinInputError(
+            f"pod.cfs_throttling.{window_name}.window does not match report window"
+        )
+
+    status = summary.get("status")
+    if status == "VALID":
+        summary_query_key = summary.get("query_key")
+        if summary_query_key != query_key:
+            raise ChangeJoinInputError(
+                f"pod.cfs_throttling.{window_name}.query_key is inconsistent"
+            )
+
+        max_rate = summary.get("max_rate")
+        max_timestamp = summary.get("max_timestamp")
+        if not isinstance(max_rate, str):
+            raise ChangeJoinInputError(
+                f"pod.cfs_throttling.{window_name}.max_rate must be exact decimal text"
+            )
+        if not isinstance(max_timestamp, str):
+            raise ChangeJoinInputError(
+                f"pod.cfs_throttling.{window_name}.max_timestamp must be exact decimal text"
+            )
+        _decimal(max_rate, field=f"pod.cfs_throttling.{window_name}.max_rate")
+        _decimal(
+            max_timestamp,
+            field=f"pod.cfs_throttling.{window_name}.max_timestamp",
+        )
+
+        any_positive = summary.get("any_positive")
+        coverage_complete = summary.get("coverage_complete")
+        if not isinstance(any_positive, bool):
+            raise ChangeJoinInputError(
+                f"pod.cfs_throttling.{window_name}.any_positive must be boolean"
+            )
+        if not isinstance(coverage_complete, bool):
+            raise ChangeJoinInputError(
+                f"pod.cfs_throttling.{window_name}.coverage_complete must be boolean"
+            )
+
+        points = summary.get("points")
+        if isinstance(points, bool) or not isinstance(points, int) or points < 0:
+            raise ChangeJoinInputError(
+                f"pod.cfs_throttling.{window_name}.points must be a non-negative integer"
+            )
+
+        coverage = _coverage(
+            summary.get("coverage"),
+            field=f"pod.cfs_throttling.{window_name}.coverage",
+        )
+        return {
+            "status": "VALID",
+            "any_positive": any_positive,
+            "max_rate": max_rate,
+            "max_timestamp": max_timestamp,
+            "query_key": query_key,
+            "points": points,
+            "coverage": coverage,
+            "coverage_complete": coverage_complete,
+            "rate_window": rate_window,
+        }
+
+    if status == "UNKNOWN":
+        result: dict[str, Any] = {
+            "status": "UNKNOWN",
+            "rate_window": rate_window,
+        }
+        if "reason_code" in summary:
+            result["reason_code"] = summary["reason_code"]
+        if "reason" in summary:
+            result["reason"] = summary["reason"]
+        coverage = _coverage(
+            summary.get("coverage"),
+            field=f"pod.cfs_throttling.{window_name}.coverage",
+        )
+        if coverage is not None:
+            result["coverage"] = coverage
+        return result
+
+    raise ChangeJoinInputError(
+        f"pod.cfs_throttling.{window_name}.status must be VALID or UNKNOWN"
+    )
+
+
 def _effective_limit_witness(pod_report: dict[str, Any]) -> dict[str, Any]:
     ratio = _require_mapping(pod_report.get("cpu_limit_ratio"), field="cpu_limit_ratio")
     status = ratio.get("status")
@@ -321,6 +462,7 @@ def _joined_pod(
     *,
     pod_report: Any,
     windows: dict[str, Any],
+    queries: dict[str, Any],
     current_declared_limit: Any,
     proposed_declared_limit: Any,
 ) -> dict[str, Any]:
@@ -336,6 +478,12 @@ def _joined_pod(
             "comparison": _comparison(
                 observed_cpu=observed,
                 proposed_limit=proposed_declared_limit,
+            ),
+            "cfs_throttling": _throttling_summary(
+                pod=pod,
+                queries=queries,
+                window_name=window_name,
+                rate_window=rate_window,
             ),
         }
 
@@ -378,6 +526,7 @@ def join_change_evidence(
         pod_name: _joined_pod(
             pod_report=pods[pod_name],
             windows=windows,
+            queries=queries,
             current_declared_limit=change["current_declared_cpu_limit"],
             proposed_declared_limit=change["proposed_declared_cpu_limit"],
         )
