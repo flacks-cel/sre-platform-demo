@@ -76,6 +76,8 @@ Um enum de cinco valores convidaria, mais cedo ou mais tarde, a um `max()` ou a 
 
 `UNKNOWN` nunca é `LOW` (ADR-005) e nunca é “provavelmente seguro”.
 
+Uma regra pode também concluir que **seu hazard não se aplica ao change avaliado**. Esse caso é `NOT_APPLICABLE`, mas ele pertence ao **eixo de aplicabilidade da própria regra**, não a `classification_status` e não à escala compartilhada de risco. A regra que introduzir `NOT_APPLICABLE` deve pré-registrar sua forma e suas razões nomeadas. O RISK-VOCABULARY-001 deliberadamente não adiciona `NOT_APPLICABLE` ao enum compartilhado nem define um enum global de aplicabilidade.
+
 ---
 
 ## 5. Qualidade da evidência não modula o nível
