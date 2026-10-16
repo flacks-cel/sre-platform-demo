@@ -195,6 +195,7 @@ def collect_normalized_evidence(
     short_window: str,
     long_window: str,
     request_rate_query: str | None = None,
+    include_throttling: bool = False,
     query_range: QueryRange | None = None,
 ) -> dict[str, Any]:
     """Acquire historical Prometheus matrices and normalize them for build_report()."""
@@ -254,6 +255,46 @@ def collect_normalized_evidence(
         "cpu_limit": {"promql": limit_query, "rate_window": None},
     }
 
+    throttled_short_by_pod: dict[str, list[Point]] = {}
+    throttled_long_by_pod: dict[str, list[Point]] = {}
+    if include_throttling:
+        throttled_short_query = (
+            "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total"
+            f"{{{selector}}}[{short_window}]))"
+        )
+        throttled_long_query = (
+            "sum by (pod) (rate(container_cpu_cfs_throttled_periods_total"
+            f"{{{selector}}}[{long_window}]))"
+        )
+        throttled_short_payload = _query_range(
+            runner,
+            query=throttled_short_query,
+            **common,
+        )
+        throttled_long_payload = _query_range(
+            runner,
+            query=throttled_long_query,
+            **common,
+        )
+        throttled_short_by_pod = _parse_matrix(
+            throttled_short_payload,
+            metric_name="cfs_throttled_short",
+            query_key="cfs_throttled_short",
+        )
+        throttled_long_by_pod = _parse_matrix(
+            throttled_long_payload,
+            metric_name="cfs_throttled_long",
+            query_key="cfs_throttled_long",
+        )
+        queries["cfs_throttled_short"] = {
+            "promql": throttled_short_query,
+            "rate_window": short_window,
+        }
+        queries["cfs_throttled_long"] = {
+            "promql": throttled_long_query,
+            "rate_window": long_window,
+        }
+
     request_by_pod: dict[str, list[Point]] = {}
     if request_rate_query is not None:
         request_payload = _query_range(runner, query=request_rate_query, **common)
@@ -272,6 +313,8 @@ def collect_normalized_evidence(
         | set(long_by_pod)
         | set(limit_by_pod)
         | set(request_by_pod)
+        | set(throttled_short_by_pod)
+        | set(throttled_long_by_pod)
     )
     expected = _expected_points(start, end, step)
 
@@ -279,25 +322,39 @@ def collect_normalized_evidence(
     for pod_name in pod_names:
         cpu_short = short_by_pod.get(pod_name, [])
         sample_count = len(cpu_short)
-        pods.append(
-            {
-                "name": pod_name,
-                "cpu_short": cpu_short,
-                "cpu_long": long_by_pod.get(pod_name, []),
-                "cpu_limit": limit_by_pod.get(pod_name),
-                "request_rate": (
-                    request_by_pod.get(pod_name) if request_rate_query is not None else None
-                ),
-                "sample_count": sample_count,
-                "coverage": {
-                    "observed_points": sample_count,
+        pod: dict[str, Any] = {
+            "name": pod_name,
+            "cpu_short": cpu_short,
+            "cpu_long": long_by_pod.get(pod_name, []),
+            "cpu_limit": limit_by_pod.get(pod_name),
+            "request_rate": (
+                request_by_pod.get(pod_name) if request_rate_query is not None else None
+            ),
+            "sample_count": sample_count,
+            "coverage": {
+                "observed_points": sample_count,
+                "expected_points": expected,
+            },
+            "restart_delta": 0,
+            "node": None,
+            "owner": None,
+        }
+        if include_throttling:
+            throttled_short = throttled_short_by_pod.get(pod_name, [])
+            throttled_long = throttled_long_by_pod.get(pod_name, [])
+            pod["cfs_throttled_short"] = throttled_short
+            pod["cfs_throttled_long"] = throttled_long
+            pod["throttling_coverage"] = {
+                "short": {
+                    "observed_points": len(throttled_short),
                     "expected_points": expected,
                 },
-                "restart_delta": 0,
-                "node": None,
-                "owner": None,
+                "long": {
+                    "observed_points": len(throttled_long),
+                    "expected_points": expected,
+                },
             }
-        )
+        pods.append(pod)
 
     return {
         "pods": pods,
