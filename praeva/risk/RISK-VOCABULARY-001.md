@@ -1,6 +1,6 @@
 # RISK-VOCABULARY-001 — Contrato de Pré-Registração
 
-> Status: **gate estrutural GREEN confirmado; vocabulário pronto para ser consumido pela primeira regra de risco.**
+> Status: **gate estrutural GREEN confirmado; vocabulário consumido pela primeira regra de risco.**
 > Base: `main @ 9a671fd`.
 > Herda ADR-001 a ADR-008.
 > Este contrato define **significado e estrutura**, não limiares.
@@ -75,6 +75,8 @@ risk_level              LOW | MEDIUM | HIGH | CRITICAL   (ausente quando UNKNOWN
 Um enum de cinco valores convidaria, mais cedo ou mais tarde, a um `max()` ou a um `>=` que trataria `UNKNOWN` como posição na escala. A separação em dois campos torna isso um erro estrutural, não uma questão de disciplina.
 
 `UNKNOWN` nunca é `LOW` (ADR-005) e nunca é “provavelmente seguro”.
+
+Uma regra pode também concluir que **seu hazard não se aplica ao change avaliado**. Esse caso é `NOT_APPLICABLE`, mas ele pertence ao **eixo de aplicabilidade da própria regra**, não a `classification_status` e não à escala compartilhada de risco. A regra que introduzir `NOT_APPLICABLE` deve pré-registrar sua forma e suas razões nomeadas. O RISK-VOCABULARY-001 deliberadamente não adiciona `NOT_APPLICABLE` ao enum compartilhado nem define um enum global de aplicabilidade.
 
 ---
 
@@ -257,6 +259,6 @@ Os invariantes estruturais independentes de regra são testados imediatamente no
 - [x] RED confirmado (`10 failed, 121 passed`; falhas apenas por módulo ainda inexistente)
 - [x] módulo de vocabulário implementado somente depois do RED
 - [x] GREEN estrutural confirmado localmente (`131 passed`, Ruff verde, working tree clean)
-- [ ] invariantes comportamentais incorporados à suíte da primeira regra antes do GREEN dessa regra
+- [x] invariantes comportamentais incorporados à suíte da primeira regra antes do GREEN dessa regra
 
-O gate estrutural deste contrato está concluído. A primeira regra de risco pode agora ser pré-registrada, mas não pode atingir GREEN enquanto os invariantes comportamentais aplicáveis acima não estiverem incorporados à suíte da própria regra.
+O gate estrutural deste contrato está concluído e seus invariantes comportamentais aplicáveis foram exercitados pela primeira regra de risco, CHANGE-RISK-001.
