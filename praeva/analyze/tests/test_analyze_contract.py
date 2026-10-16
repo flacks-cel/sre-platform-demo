@@ -7,7 +7,6 @@ from typing import Any
 
 import pytest
 
-
 CURRENT = """\
 apiVersion: apps/v1
 kind: Deployment
@@ -184,7 +183,10 @@ def test_missing_time_parameter_is_input_error() -> None:
         _analyze()(**kwargs)
 
 
-def test_missing_rule_is_cli_input_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_missing_rule_is_cli_input_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     current, proposed = _write_manifests(tmp_path)
     args = _cli_args(current, proposed)
     index = args.index("--rule")
@@ -234,9 +236,10 @@ def test_invalid_manifest_fails_before_prometheus_is_called() -> None:
     calls: list[str] = []
     kwargs = _kwargs(query_range=_transport(calls=calls))
     kwargs["current_manifest"] = "not: [valid"
+    analyze = _analyze()
 
-    with pytest.raises(Exception):
-        _analyze()(**kwargs)
+    with pytest.raises(Exception, match="current manifest"):
+        analyze(**kwargs)
 
     assert calls == []
 
