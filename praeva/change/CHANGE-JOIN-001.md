@@ -1,8 +1,10 @@
 # CHANGE-JOIN-001 — Proposed declared CPU limit × historical observed CPU facts
 
-> Status: **pré-registração; implementação bloqueada até RED confirmado.**
+> Status: **GREEN local + CI; aguardando revisão final do PR #15.**
 > Base: `main @ 6933846`.
 > Pré-requisito já cumprido: `VERIFY-WIRE-001` mergeado no PR #14.
+> Gate RED confirmado antes da implementação: `17 failed, 104 passed`, Ruff verde.
+> GREEN confirmado: `121 passed` localmente no Windows e no CI #51; Ruff verde; Docker build/push verde.
 
 ## 1. Pergunta
 
@@ -54,7 +56,7 @@ O primeiro slice aceita somente `container.space == "containers"`. `initContaine
 
 ## 4. Interface pura
 
-A implementação viverá em `praeva.change.join` e exporá:
+A implementação vive em `praeva.change.join` e expõe:
 
 ```python
 join_change_evidence(
@@ -325,7 +327,7 @@ Este slice não implementa:
 
 ## 14. Plano RED
 
-Antes da implementação, testes devem congelar pelo menos:
+Antes da implementação, testes congelaram pelo menos:
 
 1. `CALLER_ASSERTED` é obrigatório e aparece explicitamente no output;
 2. namespace divergente falha como input inválido;
@@ -355,6 +357,8 @@ Antes da implementação, testes devem congelar pelo menos:
 - [x] short/long permanecem paralelos
 - [x] effective limit permanece per-pod
 - [x] risk/evidence quality continuam separados
-- [ ] testes RED escritos
-- [ ] RED confirmado
-- [ ] implementação iniciada somente depois do RED
+- [x] testes RED escritos
+- [x] RED confirmado localmente: Ruff verde, `17 failed, 104 passed`
+- [x] implementação iniciada somente depois do RED
+- [x] GREEN local no Windows: Ruff verde, `121 passed`
+- [x] CI #51: Ruff verde, Pytest verde, Docker build/push verde
