@@ -27,7 +27,7 @@ spec:
 """
 
 PROPOSED_CRITICAL = CURRENT.replace("cpu: 500m", "cpu: 250m")
-PROPOSED_LOW = CURRENT.replace("cpu: 500m", "cpu: 500m").replace("cpu: 100m", "cpu: 100m")
+PROPOSED_LOW = CURRENT.replace("cpu: 500m", "cpu: 450m")
 PROPOSED_REMOVED = """\
 apiVersion: apps/v1
 kind: Deployment
