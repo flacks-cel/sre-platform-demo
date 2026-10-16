@@ -143,6 +143,90 @@ def _series_summary(points: list[Point] | None, window: str, query_key: str) -> 
     }
 
 
+def _throttling_coverage(pod: PodInput, window_name: str) -> dict[str, int] | None:
+    coverage = pod.get("throttling_coverage")
+    if coverage is None:
+        return None
+    if not isinstance(coverage, dict):
+        raise ValueError("throttling_coverage must be an object")
+    window_coverage = coverage.get(window_name)
+    if window_coverage is None:
+        return None
+    if not isinstance(window_coverage, dict):
+        raise ValueError("throttling coverage window must be an object")
+    observed = window_coverage.get("observed_points")
+    expected = window_coverage.get("expected_points")
+    if not isinstance(observed, int) or not isinstance(expected, int):
+        raise ValueError("throttling coverage point counts must be integers")
+    if observed < 0 or expected < 0:
+        raise ValueError("throttling coverage point counts must be non-negative")
+    return {"observed_points": observed, "expected_points": expected}
+
+
+def _throttling_summary(
+    points: list[Point] | None,
+    *,
+    window: str,
+    window_name: str,
+    query_key: str,
+    pod: PodInput,
+) -> dict[str, Any]:
+    coverage = _throttling_coverage(pod, window_name)
+
+    if not points:
+        result: dict[str, Any] = {
+            "status": "UNKNOWN",
+            "window": window,
+            "reason_code": "missing_throttling",
+            "reason": "CFS throttling series is missing or empty",
+        }
+        if coverage is not None:
+            result["coverage"] = coverage
+        return result
+
+    normalized = [_normalize_point(point, query_key) for point in points]
+    if any(not _finite(point["value"]) for point in normalized):
+        result = {
+            "status": "UNKNOWN",
+            "window": window,
+            "reason_code": "non_finite_sample",
+            "reason": "CFS throttling series contains a non-finite sample",
+        }
+        if coverage is not None:
+            result["coverage"] = coverage
+        return result
+
+    if any(_decimal(point["value"]) < 0 for point in normalized):
+        result = {
+            "status": "UNKNOWN",
+            "window": window,
+            "reason_code": "negative_throttling_rate",
+            "reason": "CFS throttling rate contains a negative sample",
+        }
+        if coverage is not None:
+            result["coverage"] = coverage
+        return result
+
+    maximum = max(
+        normalized,
+        key=lambda item: (_decimal(item["value"]), _decimal(item["timestamp"])),
+    )
+    return {
+        "status": "VALID",
+        "window": window,
+        "any_positive": _decimal(maximum["value"]) > 0,
+        "max_rate": maximum["value"],
+        "max_timestamp": maximum["timestamp"],
+        "query_key": maximum["query_key"],
+        "points": len(normalized),
+        "coverage": coverage,
+        "coverage_complete": (
+            coverage is not None
+            and coverage["observed_points"] == coverage["expected_points"]
+        ),
+    }
+
+
 def _ratio(numerator: str, denominator: str) -> Ratio:
     return {"numerator": numerator, "denominator": denominator}
 
@@ -466,7 +550,7 @@ def build_report(
         if long_summary["status"] == "UNKNOWN":
             unknown_reasons.append(f"{name}: {long_summary['reason']}")
 
-        pod_reports[name] = {
+        pod_report: dict[str, Any] = {
             "sample_count": pod.get("sample_count"),
             "coverage": _coverage_wire(pod),
             "restart_delta": pod.get("restart_delta", 0),
@@ -478,6 +562,33 @@ def build_report(
             },
             "cpu_limit_ratio": _per_pod_limit_ratio(pod, short_window),
         }
+
+        if any(
+            key in pod
+            for key in (
+                "cfs_throttled_short",
+                "cfs_throttled_long",
+                "throttling_coverage",
+            )
+        ):
+            pod_report["cfs_throttling"] = {
+                "short": _throttling_summary(
+                    pod.get("cfs_throttled_short"),
+                    window=short_window,
+                    window_name="short",
+                    query_key="cfs_throttled_short",
+                    pod=pod,
+                ),
+                "long": _throttling_summary(
+                    pod.get("cfs_throttled_long"),
+                    window=long_window,
+                    window_name="long",
+                    query_key="cfs_throttled_long",
+                    pod=pod,
+                ),
+            }
+
+        pod_reports[name] = pod_report
 
     report: dict[str, Any] = {
         "status": "UNKNOWN" if unknown_reasons else "VALID",
