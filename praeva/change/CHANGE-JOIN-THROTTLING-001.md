@@ -60,7 +60,7 @@ o join preserva deterministicamente:
 status
 any_positive
 max_rate
-a max_timestamp
+max_timestamp
 query_key
 points
 coverage
@@ -244,7 +244,7 @@ Antes da implementação, os testes congelam pelo menos:
 
 - [x] VERIFY-THROTTLING-001 mergeado
 - [x] contrato commitado antes da implementação
-- [ ] testes RED escritos
+- [x] testes RED escritos
 - [ ] RED confirmado localmente
 - [ ] implementação iniciada somente depois do RED
 - [ ] GREEN com todos os testes anteriores preservados
