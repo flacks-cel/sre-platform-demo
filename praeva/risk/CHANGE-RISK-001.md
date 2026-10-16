@@ -52,6 +52,8 @@ Regras estruturais de `margin`:
 - comparação é feita por multiplicação cruzada exata;
 - ausência ou formato inválido é `ChangeRiskInputError`, não `UNKNOWN`.
 
+`margin > 1` é uma **escolha de policy desta regra**, não apenas validação de sanidade. Esta versão exige folga positiva para separar `MEDIUM` de `LOW`; uma margem exatamente igual a `1` — isto é, sem folga adicional além da não contradição estrita — é deliberadamente inexpressável neste contrato.
+
 Nenhum valor de margem é embutido na regra.
 
 ---
@@ -279,6 +281,8 @@ P < S_pod
 
 `HIGH` só pode ser emitido se **todas as janelas long de todos os pods forem VALID** e nenhuma contradizer P.
 
+Essa exigência é deliberadamente mais estrita do que apenas encontrar um witness short: se alguma janela long está `UNKNOWN`, ainda pode existir um witness sustentado de `CRITICAL` escondido pela evidência ausente. Emitir `HIGH` nesse estado seria subestimar o nível máximo que a própria regra ainda poderia demonstrar; por isso a saída correta é `UNKNOWN`, não `HIGH` atenuado.
+
 Se alguma long está UNKNOWN, o resultado é:
 
 ```text
@@ -324,7 +328,7 @@ Depois de cumprir 8.5 e 8.6, define-se:
 M = máximo de todos os valores observados de CPU entre todos os pods e as duas janelas
 ```
 
-Este `max` é uma operação explicitamente pré-registrada para a fronteira `MEDIUM/LOW`; ele não cria `worst_pod` genérico e não soma réplicas.
+Este `max` é uma operação explicitamente pré-registrada para a fronteira `MEDIUM/LOW`; ele não cria `worst_pod` genérico e não soma réplicas. A distinção é intencional: `M` é uma redução **nomeada, com métrica definida e finalidade única** — decidir a fronteira `MEDIUM/LOW`. O `worst_pod` rejeitado no Spike 002 era um seletor genérico cuja métrica de escolha não estava fixada e poderia mudar conforme o uso. Aqui nenhum pod ganha identidade especial e `M` não pode ser reutilizado como representante genérico do workload.
 
 Como já não existe contradição:
 
@@ -357,7 +361,10 @@ Exemplo normativo com `margin=11/10` e `M=400`:
 ```text
 P=430 -> MEDIUM
 P=440 -> LOW
+P=450 -> LOW
 ```
+
+Portanto, qualquer versão anterior que associe `P=450`, `M=400`, `margin=11/10` a `MEDIUM` está incorreta; a fronteira exata é `440`.
 
 ---
 
