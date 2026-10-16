@@ -1,6 +1,6 @@
 # VERIFY-THROTTLING-001 — CFS Throttling Evidence
 
-> Status: **pré-registração v1 commitada; implementação bloqueada até RED.**
+> Status: **GREEN confirmado localmente e no CI; pronto para revisão final.**
 > Base: `main @ 8b21767`.
 > Herda ADR-001 a ADR-008 e VERIFY-WIRE-001.
 > Este slice acrescenta evidência de censura por CFS; não classifica risco.
@@ -222,13 +222,17 @@ Este slice não afirma:
 9. sample não finito -> `UNKNOWN(non_finite_sample)`;
 10. sample negativo -> `UNKNOWN(negative_throttling_rate)`.
 
+RED confirmado localmente antes da implementação: Ruff verde e `10 failed, 131 passed`, todos restritos à API/saída ainda não implementada deste contrato.
+
+GREEN confirmado localmente após implementação: Ruff verde, `141 passed`, working tree clean. GitHub CI #57 também passou Ruff, Pytest e Docker build/push.
+
 ---
 
 ## 12. Gate
 
 - [x] contrato commitado antes da implementação
-- [ ] testes RED escritos
-- [ ] RED confirmado localmente
-- [ ] primeira linha de implementação somente depois do RED
-- [ ] GREEN com todos os testes anteriores preservados
-- [ ] nenhuma regra de risco implementada neste slice
+- [x] testes RED escritos
+- [x] RED confirmado localmente
+- [x] primeira linha de implementação somente depois do RED
+- [x] GREEN com todos os testes anteriores preservados
+- [x] nenhuma regra de risco implementada neste slice
