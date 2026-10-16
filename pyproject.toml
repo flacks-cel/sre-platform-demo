@@ -12,5 +12,6 @@ testpaths = [
     "praeva/verify/tests",
     "praeva/rules/tests",
     "praeva/change/tests",
+    "praeva/risk/tests",
 ]
 pythonpath = [".", "app/api"]
