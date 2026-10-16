@@ -256,14 +256,18 @@ def test_invalid_throttling_status_is_input_error() -> None:
 
 def test_join_with_throttling_contains_no_float_recursively() -> None:
     result = _join(_report(include_throttling=True))
+    short = result["pods"]["pod-a"]["windows"]["short"]
 
+    assert "cfs_throttling" in short
     assert not _contains_float(result)
 
 
 def test_throttling_join_adds_no_risk_policy_or_worst_pod() -> None:
     result = _join(_report(include_throttling=True))
+    short = result["pods"]["pod-a"]["windows"]["short"]
     serialized = repr(result)
 
+    assert "cfs_throttling" in short
     assert "risk" not in result
     assert "risk_level" not in result
     assert "recommendation" not in result
