@@ -147,8 +147,8 @@ def test_short_and_long_windows_remain_labeled_separately():
     assert report["windows"] == {"short": "2m", "long": "5m"}
     assert evidence["short"]["window"] == "2m"
     assert evidence["long"]["window"] == "5m"
-    assert evidence["short"]["max"] == 0.7
-    assert evidence["long"]["max"] == 0.5
+    assert evidence["short"]["max"] == "0.7"
+    assert evidence["long"]["max"] == "0.5"
     assert report["selectors"]["max_cpu_usage_pod"]["window"] == "2m"
 
 
@@ -194,8 +194,8 @@ def test_per_pod_evidence_is_not_replaced_by_replica_sum():
     )
 
     assert set(report["pods"]) == {"pod-a", "pod-b"}
-    assert report["selectors"]["max_cpu_usage_pod"]["value"] == 0.6
-    assert report["selectors"]["max_cpu_usage_pod"]["value"] != 1.2
+    assert report["selectors"]["max_cpu_usage_pod"]["value"] == "0.6"
+    assert report["selectors"]["max_cpu_usage_pod"]["value"] != "1.2"
 
 
 def test_partial_coverage_is_reported_without_an_80_percent_cutoff():
@@ -214,10 +214,11 @@ def test_partial_coverage_is_reported_without_an_80_percent_cutoff():
 
     pod_report = report["pods"]["young-pod"]
     selector = report["selectors"]["max_cpu_usage_pod"]
-    assert pod_report["coverage"] == 0.4
+    expected = {"observed_points": 4, "expected_points": 10}
+    assert pod_report["coverage"] == expected
     assert pod_report["sample_count"] == 4
     assert selector["status"] == "VALID"
-    assert selector["coverage"] == 0.4
+    assert selector["coverage"] == expected
 
 
 def test_zero_request_denominator_only_makes_cost_selector_unknown():
