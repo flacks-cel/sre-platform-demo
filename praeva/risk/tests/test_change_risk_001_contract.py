@@ -1,5 +1,5 @@
-from copy import deepcopy
-from importlib import import_module
+import copy
+import importlib
 
 import pytest
 
@@ -158,12 +158,12 @@ def _joined(
 
 
 def _evaluate(joined: dict, *, margin: dict = MARGIN) -> dict:
-    module = import_module("praeva.risk.cpu_limit_insufficiency")
+    module = importlib.import_module("praeva.risk.cpu_limit_insufficiency")
     return module.evaluate_cpu_limit_insufficiency(joined=joined, margin=margin)
 
 
 def _assert_input_error(joined: dict, *, margin: dict) -> None:
-    module = import_module("praeva.risk.cpu_limit_insufficiency")
+    module = importlib.import_module("praeva.risk.cpu_limit_insufficiency")
     with pytest.raises(module.ChangeRiskInputError):
         module.evaluate_cpu_limit_insufficiency(joined=joined, margin=margin)
 
@@ -400,7 +400,7 @@ def test_unknown_relation_does_not_invent_declared_effective_divergence() -> Non
 
 def test_high_is_unchanged_when_throttling_quality_changes() -> None:
     complete_pod = _pod(short="400", long="300")
-    missing_pod = deepcopy(complete_pod)
+    missing_pod = copy.deepcopy(complete_pod)
     missing_pod["windows"]["short"]["cfs_throttling"] = _throttling(
         window="short",
         acquired=False,
