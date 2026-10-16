@@ -1,6 +1,6 @@
 # RISK-VOCABULARY-001 — Contrato de Pré-Registração
 
-> Status: **gate estrutural GREEN confirmado; vocabulário pronto para ser consumido pela primeira regra de risco.**
+> Status: **gate estrutural GREEN confirmado; vocabulário consumido pela primeira regra de risco.**
 > Base: `main @ 9a671fd`.
 > Herda ADR-001 a ADR-008.
 > Este contrato define **significado e estrutura**, não limiares.
@@ -259,6 +259,6 @@ Os invariantes estruturais independentes de regra são testados imediatamente no
 - [x] RED confirmado (`10 failed, 121 passed`; falhas apenas por módulo ainda inexistente)
 - [x] módulo de vocabulário implementado somente depois do RED
 - [x] GREEN estrutural confirmado localmente (`131 passed`, Ruff verde, working tree clean)
-- [ ] invariantes comportamentais incorporados à suíte da primeira regra antes do GREEN dessa regra
+- [x] invariantes comportamentais incorporados à suíte da primeira regra antes do GREEN dessa regra
 
-O gate estrutural deste contrato está concluído. A primeira regra de risco pode agora ser pré-registrada, mas não pode atingir GREEN enquanto os invariantes comportamentais aplicáveis acima não estiverem incorporados à suíte da própria regra.
+O gate estrutural deste contrato está concluído e seus invariantes comportamentais aplicáveis foram exercitados pela primeira regra de risco, CHANGE-RISK-001.
