@@ -182,7 +182,9 @@ def _parse_matrix(
             raise OwnershipPrometheusAdapterError("Prometheus matrix series must be an object")
         labels = series.get("metric")
         if not isinstance(labels, dict):
-            raise OwnershipPrometheusAdapterError("Prometheus matrix series is missing metric labels")
+            raise OwnershipPrometheusAdapterError(
+                "Prometheus matrix series is missing metric labels"
+            )
         identity = _required_labels(
             labels,
             required=required_labels,
