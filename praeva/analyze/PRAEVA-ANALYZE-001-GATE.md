@@ -97,5 +97,6 @@ Após adicionar o teste permanente da captura real:
 - [x] respostas Prometheus raw capturadas e versionadas;
 - [x] live e replay idênticos byte a byte;
 - [x] fixture real promovida a teste determinístico;
-- [x] GREEN final local com `194 passed`;
-- [ ] CI final no head deste gate.
+- [x] GREEN final local com `194 passed`.
+
+O CI remoto é um gate do PR, não um campo auto-referente deste arquivo: seu resultado final deve ser verificado no head do pull request antes de mergear.
