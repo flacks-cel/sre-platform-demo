@@ -139,3 +139,7 @@ def main(argv: list[str] | None = None, *, query_range: QueryRange | None = None
     else:
         print(json.dumps(document, sort_keys=True, separators=(",", ":")))
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
