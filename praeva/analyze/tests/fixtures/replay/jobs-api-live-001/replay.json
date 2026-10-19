@@ -1,0 +1,35 @@
+{
+  "acquisition": {
+    "end": "1792424070",
+    "long_window": "5m",
+    "short_window": "2m",
+    "start": "1792423770",
+    "step": "15"
+  },
+  "case": "jobs-api-live-001",
+  "git_revision": "c14ed1fa5e423fec65947efc44baa312fa108d6b",
+  "responses": [
+    "prometheus\\cpu_short.json",
+    "prometheus\\cpu_long.json",
+    "prometheus\\cpu_limit.json",
+    "prometheus\\cfs_throttled_short.json",
+    "prometheus\\cfs_throttled_long.json"
+  ],
+  "rule_id": "CHANGE-RISK-001",
+  "rule_params": {
+    "margin": "11/10"
+  },
+  "scenario": {
+    "current_cpu_limit": "500m",
+    "proposed_cpu_limit": "250m"
+  },
+  "workload": {
+    "api_group": "apps",
+    "container": "jobs-api",
+    "container_space": "containers",
+    "kind": "Deployment",
+    "name": "jobs-api",
+    "namespace": "app",
+    "pod_regex": "jobs-api-.*"
+  }
+}
