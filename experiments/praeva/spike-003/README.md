@@ -13,17 +13,19 @@
 
 The spike exists because a historical fact derived from `rate(...[W])` has more structure than a point labeled by `max_timestamp`.
 
-For a rate fact evaluated at `T`, the relevant support is conceptually:
+For a rate fact evaluated at `T`, define the **support envelope** as:
 
 ```text
 [T - W, T]
 ```
 
+This is deliberately an envelope, not a claim that Prometheus selected raw samples at both endpoints. A Prometheus range vector uses a left-open/right-closed raw sample interval `(T-W, T]`, while `rate()` may extrapolate the calculated rate to the range boundaries. The experiment must keep those semantics distinct.
+
 The product must distinguish at least three questions:
 
 1. **workload attribution** — which Pod UID/controller chain is observed for `pod="X"` on the evaluation grid;
-2. **identity continuity** — whether the same Pod UID remains the identity behind `pod="X"` across the grid covering the support of the fact;
-3. **population completeness** — whether the set of pods observed by Verify is the target Deployment population needed by the logical step being evaluated.
+2. **identity continuity** — whether the same Pod UID remains the identity behind `pod="X"` across the grid covering the support envelope of the fact;
+3. **population completeness** — whether the evidence domain contains the target Deployment population needed by the logical step being evaluated.
 
 These are not one global `ownership_verified` boolean.
 
@@ -38,7 +40,7 @@ kube_pod_owner
 kube_replicaset_owner
 ```
 
-with exact evaluation timestamps and the per-timestamp states:
+with exact **Prometheus evaluation timestamps** and the per-timestamp states:
 
 ```text
 evidence_status = VALID | UNKNOWN
@@ -100,6 +102,22 @@ kube_pod_container_resource_limits
 
 The existing Verify adapter currently aggregates historical CPU-limit evidence by pod name and therefore discards the KSM `uid` label. This spike may query the raw/preserved UID-bearing form separately for comparison, but it must not silently alter `VERIFY-WIRE-001` during the experiment.
 
+### 3.1 Evaluation timestamp is not scrape timestamp
+
+The ownership wire is evaluated through PromQL instant-vector semantics at each `query_range` evaluation time. The sample used by an instant selector may have been scraped before the evaluation timestamp, subject to Prometheus lookback/staleness semantics.
+
+The spike must therefore record this distinction instead of saying that a KSM sample was physically scraped exactly at the evaluation timestamp.
+
+Where practical, diagnostic companion queries should expose the source-sample timestamp by applying `timestamp()` **before** aggregation, for example conceptually:
+
+```promql
+max by (namespace, pod, uid, owner_kind, owner_name, owner_is_controller) (
+  timestamp(kube_pod_owner{...})
+)
+```
+
+This is diagnostic provenance only. The spike does not introduce a freshness threshold.
+
 ---
 
 ## 4. Evidence-support model to test
@@ -128,37 +146,83 @@ For a fact derived from:
 rate(counter[W]) evaluated at T
 ```
 
-its declared support is:
+define:
 
 ```text
-[T - W, T]
+support_start    = T - W
+support_envelope = [support_start, T]
+raw range vector = (support_start, T]
 ```
 
-This does **not** mean Praeva can prove continuous event-time ownership at every real instant in that interval.
+The closed support envelope is used for conservative identity reasoning because `rate()` extrapolates to the boundaries. It does **not** mean Praeva can prove continuous event-time ownership at every real instant in that interval.
 
 The candidate operational proof to test is:
 
 ```text
-same Pod UID on every Praeva evaluation-grid point covering [T-W, T]
+same Pod UID on every required Praeva ownership evaluation point in the support envelope
 AND
 TARGET_MATCH on those required ownership evaluation points
 AND
-kube_pod_created(uid) <= T-W
+kube_pod_created(uid) <= support_start
 ```
 
 This candidate is intentionally named **evaluation-grid support coverage**, not continuous event-time proof.
 
-The experiment must preserve the residual limitation that a complete name-reuse lifecycle could theoretically occur entirely between two evaluation points. No nearest-neighbor, interpolation, or invented event-time precision is allowed.
+The experiment must preserve residual limitations explicitly. Events can occur entirely between two evaluation points, including a short-lived name-reuse lifecycle or a controller-owner mutation that begins and ends between observations. No nearest-neighbor, interpolation, or invented event-time precision is allowed.
 
-### 4.3 Left-edge acquisition
+### 4.3 Verify grid and phase-aligned extended ownership grid
 
-If Verify starts at `start` and the largest rate window is `W_max`, ownership/identity acquisition must be experimentally evaluated over at least:
+Let the Verify evaluation grid be:
 
 ```text
-[start - W_max, end]
+G_verify = { start + n*step | n >= 0 and point <= end }
 ```
 
-The spike tests this extended acquisition instead of discarding witnesses near the left edge merely because their support begins before Verify's evaluation interval.
+Every Verify witness timestamp `T` must be one of those evaluation points.
+
+A naive ownership start of exactly `start-W_max` is unsafe when `W_max` is not an integer multiple of `step`, because it shifts the phase of `query_range` and may no longer evaluate ownership at the same timestamps as Verify.
+
+The phase-aligned candidate to test is:
+
+```text
+extension_steps         = ceil(W_max / step)
+extended_ownership_start = start - extension_steps*step
+
+G_ownership = {
+  extended_ownership_start + n*step
+  | n >= 0 and point <= end
+}
+```
+
+This guarantees:
+
+```text
+extended_ownership_start <= start - W_max
+G_verify ⊆ G_ownership
+```
+
+while preserving exact decimal arithmetic and the Verify grid phase.
+
+For a witness `(T, W)`, the first candidate support-grid definition is:
+
+```text
+G_support(T,W) = {
+  g in G_ownership
+  | support_start <= g <= T
+}
+```
+
+If `support_start` itself is not on `G_ownership`, the spike must **not** silently round it and call the boundary proven. It must test whether the creation bound plus the first grid observation is sufficient for the eventual contract, or whether an additional boundary/shifted-grid query is required. This is an experimental question, not a decision hidden in the implementation.
+
+### 4.4 Left-edge acquisition
+
+Ownership/identity acquisition is therefore tested over the phase-aligned interval:
+
+```text
+[extended_ownership_start, end]
+```
+
+rather than discarding witnesses near Verify's left edge merely because their support begins before `start`.
 
 No product default for `W_max` is introduced: the value is derived from the explicit rate windows already supplied to the analysis.
 
@@ -172,21 +236,25 @@ The tested proof therefore observes the controller chain at the required evaluat
 
 `kube_pod_created` is used only to strengthen the existence/identity boundary of the support; it does not replace temporal owner observations.
 
+The spike must also distinguish:
+
+```text
+Prometheus evaluation time
+KSM source-sample time
+Kubernetes event time
+```
+
+Only the first two are observable through the proposed wire. Continuous Kubernetes event-time history is not claimed.
+
 ---
 
 ## 6. Population model to test
 
-For each evaluation timestamp under study, derive two sets independently.
+A single `V(T)` is too coarse because absence from a derived `rate()` result can mean something different from exclusion by the user selector. The spike must keep selector scope and derived-evidence availability separate.
 
-### 6.1 Verify-observed population
+### 6.1 Target-owned population
 
-```text
-V(T) = pods represented by the Verify acquisition at T / for the relevant fact
-```
-
-The experiment must record how this set is constructed from the current per-pod Prometheus evidence and where missing rate samples make membership ambiguous.
-
-### 6.2 Target-owned population
+For each evaluation timestamp `T`:
 
 ```text
 O(T) = pods whose historical Pod -> ReplicaSet -> Deployment chain resolves
@@ -195,21 +263,77 @@ O(T) = pods whose historical Pod -> ReplicaSet -> Deployment chain resolves
 
 This set must be derived from historical ownership telemetry in the namespace, not from the user-supplied pod regex or a pod-name prefix.
 
-### 6.3 Set differences
+### 6.2 Selector-admitted target population
 
-Record explicitly:
+For the same `T`, evaluate the declared pod regex against the names in `O(T)`:
 
 ```text
-missing_target_pods(T) = O(T) - V(T)
-extra_observed_pods(T) = V(T) - O(T)
+S_target(T) = { pod in O(T) | pod name matches the declared pod regex }
 ```
 
-Do not collapse the two conditions.
+This is a syntactic selector-scope fact. It does not require the pod to have produced a CPU/rate sample.
 
-They represent different failure modes:
+Then:
 
-- omission can hide a worse target pod;
-- inclusion can introduce evidence from a foreign workload.
+```text
+selector_omissions(T) = O(T) - S_target(T)
+```
+
+A selector omission is therefore distinguishable from missing telemetry.
+
+### 6.3 Per-fact Verify evidence population
+
+For every relevant Verify query/fact family `q`, define:
+
+```text
+V_q(T) = pods for which the current Verify acquisition produced a usable q result at T
+```
+
+Examples include:
+
+```text
+V_cpu_short(T)
+V_cpu_long(T)
+V_cfs_short(T)
+V_cfs_long(T)
+V_cpu_limit(T)
+```
+
+The spike must document precisely how each `V_q(T)` is reconstructed from raw/current adapter output.
+
+For target pods that are selector-admitted but lack a derived fact:
+
+```text
+derived_evidence_missing_q(T) = S_target(T) - V_q(T)
+```
+
+This may happen for reasons such as a young series with too few counter samples. It must not be mislabeled as a regex omission.
+
+### 6.4 Foreign/unattributable observed population
+
+For each `q`:
+
+```text
+extra_observed_q(T) = V_q(T) - O(T)
+```
+
+The spike must further separate, where the ownership substrate permits it:
+
+```text
+foreign_target_differs_q(T) = observed pods with VALID/TARGET_DIFFERS
+ownership_unresolved_q(T)   = observed pods whose ownership is UNKNOWN
+```
+
+Do not collapse foreign evidence and unresolved evidence.
+
+### 6.5 Set differences are diagnostics, not product policy
+
+The conditions represent different failure modes:
+
+- selector omission can hide a worse target pod;
+- selector-admitted but missing derived evidence is an evidence-completeness problem;
+- inclusion can introduce evidence from a foreign workload;
+- unresolved ownership means the acquired fact cannot yet be attributed.
 
 This spike does not freeze whether an extra foreign pod invalidates an entire future analysis or is rejected locally by an attribution layer. It must produce enough evidence to make that later contract explicit.
 
@@ -219,7 +343,7 @@ This spike does not freeze whether an extra foreign pod invalidates an entire fu
 
 The spike should construct or identify cases sufficient to validate this logical distinction:
 
-| Population incomplete | Candidate product consequence to evaluate later |
+| Population/evidence incomplete | Candidate product consequence to evaluate later |
 |---|---|
 | valid attributed long-window contradiction exists | `CRITICAL` may remain provable |
 | candidate `HIGH` | cannot exclude a hidden long-window contradiction; likely `UNKNOWN` |
@@ -247,18 +371,22 @@ Subset-only evaluation could emit HIGH even though the complete target populatio
 The spike must answer, with captured raw Prometheus responses where applicable:
 
 1. Does `kube_pod_created` for the current lab provide stable `namespace + pod + uid` identity and a usable Unix creation timestamp historically?
-2. Can ownership acquisition over `[start-W_max, end]` be executed on the same explicit evaluation step as Verify without schema or volume problems?
-3. For each existing CPU short/long witness, can the spike construct its evaluation-grid support points deterministically?
-4. Can one UID be resolved consistently for the pod name across every required support point?
-5. Can `kube_pod_created(uid) <= support_start` be proved for those witnesses?
-6. Does the Pod -> ReplicaSet -> Deployment chain remain `TARGET_MATCH` across the required evaluation points?
-7. Can a UID change within a fact support be detected deterministically from the available KSM telemetry?
-8. Can target-owned population `O(T)` be enumerated independently from the Verify regex?
-9. Can `V(T)` and `O(T)` be compared without using live Kubernetes state as historical evidence?
-10. Do normal lab runs expose `missing_target_pods` or `extra_observed_pods` under the current `jobs-api-.*` selector?
-11. What happens during an actual rollout/HPA churn boundary?
-12. Is query/result volume still small enough for replay fixtures and deterministic CI tests?
-13. Does the current wire expose any systematic condition that makes evaluation-grid support coverage practically unattainable?
+2. Can phase-aligned ownership acquisition over `[extended_ownership_start, end]` be executed on the same explicit evaluation step as Verify without schema or volume problems?
+3. Does `G_verify` remain an exact subset of `G_ownership` for the real run?
+4. For each existing CPU short/long witness, can the spike construct its support envelope and candidate support-grid points deterministically?
+5. What happens when `W` is not an integer multiple of `step`; is a separate boundary/shifted grid required?
+6. Can one UID be resolved consistently for the pod name across every required support point?
+7. Can `kube_pod_created(uid) <= support_start` be proved for those witnesses?
+8. Does the Pod -> ReplicaSet -> Deployment chain remain `TARGET_MATCH` across the required evaluation points?
+9. Can a UID change within a fact support be detected deterministically from the available KSM telemetry?
+10. Can target-owned population `O(T)` be enumerated independently from the Verify regex?
+11. Can selector omission be distinguished from selector-admitted-but-missing derived telemetry?
+12. Can per-fact `V_q(T)` and `O(T)` be compared without using live Kubernetes state as historical evidence?
+13. Do normal lab runs expose selector omissions, missing derived evidence, foreign observed pods, or unresolved ownership under the current `jobs-api-.*` selector?
+14. What happens during an actual rollout/HPA churn boundary?
+15. What is the observed difference between KSM source-sample timestamps and Prometheus evaluation timestamps?
+16. Is query/result volume still small enough for replay fixtures and deterministic CI tests?
+17. Does the current wire expose any systematic condition that makes evaluation-grid support coverage practically unattainable?
 
 ---
 
@@ -310,29 +438,39 @@ contradictory ownership remains VALID/TARGET_DIFFERS
 
 Do not convert the ownership evidence itself into `UNKNOWN`.
 
-### S5 — missing target pod
+### S5 — selector omission
 
-`O(T) - V(T)` is non-empty.
-
-Expected experimental outcome:
-
-```text
-population omission is observable and named
-```
-
-### S6 — extra observed pod
-
-`V(T) - O(T)` is non-empty.
+A target-owned pod exists in `O(T)` but its name does not satisfy the declared regex.
 
 Expected experimental outcome:
 
 ```text
-foreign acquisition is observable and named independently of omission
+selector omission is observable independently of telemetry completeness
 ```
 
-### S7 — left-edge support
+### S6 — selector-admitted target pod without derived rate evidence
 
-A witness at or near Verify `start` whose `T-W` precedes Verify `start` but is covered by the extended ownership acquisition.
+A target-owned pod matches the regex but does not produce a usable rate-derived result at `T`.
+
+Expected experimental outcome:
+
+```text
+missing derived telemetry is not mislabeled as selector omission
+```
+
+### S7 — extra observed pod
+
+A Verify fact is produced for a pod that is not in `O(T)`.
+
+Expected experimental outcome:
+
+```text
+foreign/unresolved acquisition is observable and named independently of omission
+```
+
+### S8 — left-edge support
+
+A witness at or near Verify `start` whose support begins before Verify `start` but is covered by the phase-aligned extended ownership acquisition.
 
 Expected experimental outcome:
 
@@ -340,7 +478,7 @@ Expected experimental outcome:
 support is testable without dropping the witness solely because of the analysis left edge
 ```
 
-### S8 — population-incomplete HIGH counterexample
+### S9 — population-incomplete HIGH counterexample
 
 Synthetic deterministic fixture containing A/B observed and C omitted with a long-window contradiction.
 
@@ -349,6 +487,28 @@ Expected experimental outcome:
 ```text
 subset-only universal reasoning is demonstrably unsafe for HIGH
 ```
+
+### S10 — non-divisible window/step
+
+Synthetic deterministic fixture where `W % step != 0`.
+
+Expected experimental outcome:
+
+```text
+phase alignment is preserved and support_start is not silently rounded into a proof
+```
+
+### S11 — stale/lookback diagnostic
+
+Capture source-sample timestamps for KSM owner observations and compare them with evaluation timestamps, including at least one churn boundary if the lab provides one.
+
+Expected experimental outcome:
+
+```text
+evaluation time and source-sample time remain explicitly distinguishable
+```
+
+No freshness threshold is chosen in this spike.
 
 ---
 
@@ -361,8 +521,11 @@ uid_not_present_at_support_start
 uid_change_within_support_grid
 ownership_unknown_within_support_grid
 ownership_target_differs_within_support_grid
-missing_target_pod
-extra_observed_pod
+support_boundary_not_on_grid
+selector_omission
+derived_evidence_missing
+foreign_target_differs
+ownership_unresolved
 population_unknown_at_timestamp
 ```
 
@@ -386,6 +549,14 @@ kube_replicaset_owner raw response
 kube_pod_created raw response
 ```
 
+Where practical, also capture diagnostic source-sample timestamp responses for:
+
+```text
+kube_pod_owner
+kube_replicaset_owner
+kube_pod_created
+```
+
 If UID-preserving historical resource-limit evidence is queried separately, capture that raw response too.
 
 Record:
@@ -397,12 +568,14 @@ step
 short_window
 long_window
 W_max
+extension_steps
 extended_ownership_start
 namespace
 target Deployment
 container
 pod regex
 Prometheus version
+Prometheus lookback configuration if exposed by the server
 KSM/chart pin
 ```
 
@@ -423,9 +596,10 @@ This spike does not:
 - prove application revision/image/version homogeneity;
 - change `application_version_relation = UNVERIFIED`;
 - introduce nearest-neighbor ownership matching;
-- claim continuous event-time identity;
+- claim continuous event-time identity or ownership;
 - add recommendation/sizing behavior;
 - choose policy for foreign acquired pods;
+- choose an evidence-freshness threshold;
 - support arbitrary workload kinds beyond the current `apps/Deployment` ownership substrate.
 
 ---
@@ -446,20 +620,25 @@ application_version_relation = UNVERIFIED
 
 must remain unchanged until a separate pre-registered component proves stronger version/freshness semantics.
 
+Prometheus/KSM source-sample age recorded by this spike is acquisition provenance. It must not be reinterpreted as `application_version_relation`.
+
 ---
 
 ## 14. Exit criteria
 
 The spike is complete only when the findings can answer all of the following without product-policy guesswork:
 
-- [ ] exact support-grid construction for instantaneous and rate-derived facts is demonstrated;
-- [ ] extended ownership acquisition `[start-W_max, end]` is tested;
+- [ ] exact support-envelope and raw range-vector semantics are demonstrated;
+- [ ] phase-aligned extended ownership acquisition is tested;
+- [ ] `G_verify ⊆ G_ownership` is demonstrated for the real run;
+- [ ] non-divisible `W/step` behavior is exercised without silent boundary rounding;
 - [ ] `kube_pod_created` existence-bound check is tested;
 - [ ] same-UID continuity on the support grid is tested;
 - [ ] target ownership on the support grid is tested;
+- [ ] KSM evaluation time versus source-sample time is measured;
 - [ ] target-owned population enumeration is demonstrated;
-- [ ] observed-vs-owned set difference is demonstrated;
-- [ ] missing and extra populations are kept separate;
+- [ ] selector omission is separated from missing derived evidence;
+- [ ] foreign TARGET_DIFFERS is separated from ownership UNKNOWN;
 - [ ] left-edge witness is exercised;
 - [ ] young-pod support is exercised;
 - [ ] UID-change fixture is exercised;
