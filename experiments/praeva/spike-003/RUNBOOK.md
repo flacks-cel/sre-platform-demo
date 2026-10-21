@@ -42,6 +42,22 @@ extended_ownership_start = start - 20*15s
 
 R1 happens to have `W_max % step == 0`; this does **not** satisfy the required synthetic non-divisible-window scenario from the main pre-registration.
 
+### Post-F1 operational preflight
+
+Finding F1 showed that backend-global TSDB time coverage does not prove availability of the specific series required by R1.
+
+After F1, before another R1 collection, run:
+
+```bash
+python experiments/praeva/spike-003/preflight.py
+```
+
+The helper checks evaluation-grid presence for the target CPU, throttling, CPU-limit, Pod-owner, ReplicaSet-owner, and Pod-created metric families over the candidate R1 geometry. It may report the earliest mechanically derived wall-clock time at which the current trailing availability could support a full R1 window.
+
+This preflight was added **after** F1 and does not retroactively change the frozen R1 parameters, hypotheses, or exit criteria. It is only a lab-readiness guard. It does not prove population completeness, ownership semantics, raw-scrape/event-time continuity, or product eligibility.
+
+A non-ready preflight means: preserve the observation and do not run another evidential R1 yet.
+
 ### Required collection
 
 Capture raw Prometheus responses for:
