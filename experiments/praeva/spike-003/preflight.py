@@ -56,18 +56,25 @@ def probe_set() -> dict[str, dict[str, str]]:
                 f"{target_container}}}) or vector(0)"
             ),
         },
-        "cpu_limit": {
+        "cpu_limit_verify": {
             "required_from": "analysis",
             "promql": (
                 "count(kube_pod_container_resource_limits{"
                 f'{target_container},resource="cpu"}}) or vector(0)'
             ),
         },
+        "cpu_limit_uid": {
+            "required_from": "extended",
+            "promql": (
+                "count(kube_pod_container_resource_limits{"
+                f'{target_container},resource="cpu",uid!=""}}) or vector(0)'
+            ),
+        },
         "pod_owner": {
             "required_from": "extended",
             "promql": (
                 "count(kube_pod_owner{"
-                f'namespace="{namespace}",pod=~"{pod_regex}",'
+                f'namespace="{namespace}",pod=~"{pod_regex}",uid!="",'
                 'owner_is_controller="true"}) or vector(0)'
             ),
         },
@@ -83,7 +90,7 @@ def probe_set() -> dict[str, dict[str, str]]:
             "required_from": "extended",
             "promql": (
                 "count(kube_pod_created{"
-                f'namespace="{namespace}",pod=~"{pod_regex}"}}) or vector(0)'
+                f'namespace="{namespace}",pod=~"{pod_regex}",uid!=""}}) or vector(0)'
             ),
         },
     }
