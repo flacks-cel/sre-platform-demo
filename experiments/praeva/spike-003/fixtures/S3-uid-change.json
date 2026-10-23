@@ -1,0 +1,77 @@
+{
+  "fixture_id": "S3-uid-change",
+  "provenance": "SYNTHETIC",
+  "purpose": "Same pod name changes UID inside one support grid while every per-timestamp ownership observation remains VALID/TARGET_MATCH.",
+  "why_synthetic": "The current lab target is a Deployment whose pod names normally change across replacement; deterministic same-name UID reuse is therefore modeled directly at the Prometheus ownership-wire level.",
+  "target": {
+    "api_group": "apps",
+    "kind": "Deployment",
+    "namespace": "app",
+    "name": "jobs-api"
+  },
+  "grid": {
+    "start": "0",
+    "end": "75",
+    "step": "15",
+    "required_timestamps": ["0", "15", "30", "45", "60", "75"]
+  },
+  "pod": "jobs-api-fixed",
+  "pod_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "jobs-api-fixed",
+            "uid": "pod-uid-a",
+            "owner_kind": "ReplicaSet",
+            "owner_name": "jobs-api-rs-a",
+            "owner_is_controller": "true"
+          },
+          "values": [["0", "1"], ["15", "1"], ["30", "1"]]
+        },
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "jobs-api-fixed",
+            "uid": "pod-uid-b",
+            "owner_kind": "ReplicaSet",
+            "owner_name": "jobs-api-rs-b",
+            "owner_is_controller": "true"
+          },
+          "values": [["45", "1"], ["60", "1"], ["75", "1"]]
+        }
+      ]
+    }
+  },
+  "replicaset_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "replicaset": "jobs-api-rs-a",
+            "owner_kind": "Deployment",
+            "owner_name": "jobs-api",
+            "owner_is_controller": "true"
+          },
+          "values": [["0", "1"], ["15", "1"], ["30", "1"]]
+        },
+        {
+          "metric": {
+            "namespace": "app",
+            "replicaset": "jobs-api-rs-b",
+            "owner_kind": "Deployment",
+            "owner_name": "jobs-api",
+            "owner_is_controller": "true"
+          },
+          "values": [["45", "1"], ["60", "1"], ["75", "1"]]
+        }
+      ]
+    }
+  }
+}
