@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+import importlib.util
 import json
-import sys
 from pathlib import Path
 from typing import Any
-
-SPIKE_DIR = Path(__file__).resolve().parents[1]
-if str(SPIKE_DIR) not in sys.path:
-    sys.path.insert(0, str(SPIKE_DIR))
-
-from support_model import evaluate_identity_continuity
 
 from praeva.ownership.historical import build_ownership_report
 from praeva.ownership.prometheus_adapter import collect_ownership_evidence
 
+SPIKE_DIR = Path(__file__).resolve().parents[1]
 FIXTURE = SPIKE_DIR / "fixtures" / "S3-uid-change.json"
+SUPPORT_MODEL = SPIKE_DIR / "support_model.py"
+
+
+def _support_model():
+    spec = importlib.util.spec_from_file_location("spike003_support_model", SUPPORT_MODEL)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"cannot load support model: {SUPPORT_MODEL}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _load_fixture() -> dict[str, Any]:
@@ -58,7 +63,7 @@ def test_s3_uid_change_is_detected_even_when_every_point_target_matches() -> Non
     assert [facts[t]["evidence_status"] for t in timestamps] == ["VALID"] * 6
     assert [facts[t]["relation"] for t in timestamps] == ["TARGET_MATCH"] * 6
 
-    result = evaluate_identity_continuity(
+    result = _support_model().evaluate_identity_continuity(
         ownership_report=report,
         pod=pod,
         required_timestamps=timestamps,
@@ -74,7 +79,7 @@ def test_s3_control_subset_with_one_uid_is_proven() -> None:
     report = _report_from_fixture(fixture)
     pod = fixture["pod"]
 
-    result = evaluate_identity_continuity(
+    result = _support_model().evaluate_identity_continuity(
         ownership_report=report,
         pod=pod,
         required_timestamps=["0", "15", "30"],
