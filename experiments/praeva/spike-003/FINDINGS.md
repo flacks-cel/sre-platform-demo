@@ -319,3 +319,124 @@ A control using a selector that admits both target Pods produces no omission.
 ### Experimental consequence
 
 The candidate population model must preserve separate set differences for `O(T) - S_target(T)` and `S_target(T) - V_q(T)`. The risk consequence of those differences remains out of scope for this spike.
+
+## F6 — Missing derived evidence is distinguishable from selector omission
+
+### Provenance
+
+Synthetic scenario `S6-derived-evidence-missing`.
+
+### Observation
+
+Two Pods resolve as `VALID/TARGET_MATCH` and both are admitted by the selector:
+
+```text
+O(T)        = {jobs-api-a, jobs-api-b}
+S_target(T) = {jobs-api-a, jobs-api-b}
+selector_omissions(T) = empty
+```
+
+The short-window Verify family observes only `jobs-api-a`, while the long-window family observes both Pods:
+
+```text
+V_cpu_short(T) = {jobs-api-a}
+V_cpu_long(T)  = {jobs-api-a, jobs-api-b}
+```
+
+The population reducer therefore returns:
+
+```text
+derived_evidence_missing_cpu_short = {jobs-api-b}
+derived_evidence_missing_cpu_long  = empty
+```
+
+### Finding
+
+> A target-owned, selector-admitted Pod can lack one derived evidence family without being a selector omission.
+
+### Experimental consequence
+
+Derived-evidence completeness must remain fact-family-specific. A future attribution/population contract cannot collapse `S_target(T) - V_q(T)` across all `q` into one undifferentiated selector failure.
+
+## F7 — Extra observed evidence can be identified as VALID/TARGET_DIFFERS
+
+### Provenance
+
+Synthetic combined scenarios `S4-TARGET_DIFFERS` and `S7-extra-observed`.
+
+### Observation
+
+At the tested timestamp:
+
+```text
+jobs-api-a  -> VALID / TARGET_MATCH
+other-api-x -> VALID / TARGET_DIFFERS
+```
+
+Verify observes both Pods for the tested fact family. The population reducer reports:
+
+```text
+O(T)                    = {jobs-api-a}
+extra_observed          = {other-api-x}
+foreign_target_differs  = {other-api-x}
+ownership_unresolved    = empty
+```
+
+The foreign Pod remains a valid contradictory ownership observation; it is not converted to `UNKNOWN`.
+
+### Finding
+
+> Extra observed Verify evidence can be separated from the target population and further classified as valid foreign ownership when the historical controller chain resolves to another workload.
+
+### Experimental consequence
+
+A future attribution layer can reject or quarantine foreign evidence without corrupting the underlying `WORKLOAD-OWNERSHIP-001` semantics. Whether one foreign Pod invalidates an entire analysis remains a later product-policy decision.
+
+## F8 — Population-incomplete HIGH can hide a CRITICAL contradiction
+
+### Provenance
+
+Synthetic scenario `S9-population-incomplete-high` evaluated through the existing `CHANGE-RISK-001` implementation.
+
+### Observation
+
+The proposed CPU limit is `350m`.
+
+Observed subset:
+
+```text
+A: short=400m, long=300m
+B: short=300m, long=300m
+```
+
+Running the real risk evaluator on `{A,B}` produces:
+
+```text
+classification_status = CLASSIFIED
+risk_level            = HIGH
+classification_basis  = short_window_only_contradiction
+```
+
+The complete population adds hidden Pod `C`:
+
+```text
+C: short=300m, long=500m
+```
+
+Running the same evaluator on `{A,B,C}` produces:
+
+```text
+classification_status = CLASSIFIED
+risk_level            = CRITICAL
+classification_basis  = sustained_window_contradiction
+```
+
+### Finding
+
+> A population-incomplete subset can satisfy the existing HIGH rule even when an omitted target Pod would make the complete population CRITICAL.
+
+This directly demonstrates the quantifier asymmetry: CRITICAL is existential over valid long-window contradictions, while HIGH requires enough population completeness to exclude any hidden long-window contradiction first.
+
+### Experimental consequence
+
+A future integration must not emit HIGH from a population known to be incomplete merely because every observed long window excludes CRITICAL. This spike validates the logical hazard; it does not modify `CHANGE-RISK-001` or introduce a new product reason code.
