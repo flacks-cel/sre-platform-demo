@@ -147,3 +147,38 @@ def test_s2_creation_bound_accepts_creation_at_support_start() -> None:
     assert result["creation_timestamp"] == "10.000"
     assert result["support_start"] == "10"
     assert "diagnostic" not in result
+
+
+def test_s10_non_divisible_window_preserves_phase_and_reports_boundary_gap() -> None:
+    fixture = _load_fixture("S10-non-divisible-window-step.json")
+    geometry = fixture["geometry"]
+    expected = fixture["expected"]
+
+    result = _support_model().evaluate_support_geometry(**geometry)
+
+    assert result["extension_steps"] == expected["extension_steps"]
+    assert result["extended_ownership_start"] == expected["extended_ownership_start"]
+    assert result["verify_subset_of_ownership"] is True
+    assert result["support_start"] == expected["support_start"]
+    assert result["support_boundary_on_grid"] is False
+    assert result["support_grid"][0] == expected["first_support_grid_point"]
+    assert result["diagnostic"] == expected["diagnostic"]
+
+
+def test_s10_divisible_control_has_support_boundary_on_grid() -> None:
+    result = _support_model().evaluate_support_geometry(
+        analysis_start="600",
+        analysis_end="660",
+        step="15",
+        w_max_seconds="120",
+        witness_timestamp="600",
+        window_seconds="120",
+    )
+
+    assert result["extension_steps"] == "8"
+    assert result["extended_ownership_start"] == "480"
+    assert result["verify_subset_of_ownership"] is True
+    assert result["support_start"] == "480"
+    assert result["support_boundary_on_grid"] is True
+    assert result["support_grid"][0] == "480"
+    assert "diagnostic" not in result
