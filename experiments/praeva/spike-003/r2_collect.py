@@ -56,9 +56,15 @@ def compute_r2_interval(*, mutation_before: str, mutation_after: str) -> dict[st
         "short_window": collect.SHORT_WINDOW,
         "long_window": collect.LONG_WINDOW,
         "w_max_seconds": collect.canonical_decimal(w_max),
-        "pre_mutation_analysis_seconds": collect.canonical_decimal(PRE_MUTATION_ANALYSIS),
-        "post_mutation_analysis_seconds": collect.canonical_decimal(POST_MUTATION_ANALYSIS),
-        "ingestion_lag_seconds": collect.canonical_decimal(collect.INGESTION_LAG),
+        "pre_mutation_analysis_seconds": collect.canonical_decimal(
+            PRE_MUTATION_ANALYSIS
+        ),
+        "post_mutation_analysis_seconds": collect.canonical_decimal(
+            POST_MUTATION_ANALYSIS
+        ),
+        "ingestion_lag_seconds": collect.canonical_decimal(
+            collect.INGESTION_LAG
+        ),
         "extension_steps": collect.canonical_decimal(extension_steps),
         "extended_ownership_start": collect.canonical_decimal(extended_start),
         "earliest_collection": collect.canonical_decimal(earliest_collection),
@@ -135,7 +141,9 @@ def _collect_queries(
             "end": interval["end"],
             "step": interval["step"],
             "result_series": (
-                len(data.get("result", [])) if isinstance(data.get("result"), list) else None
+                len(data.get("result", []))
+                if isinstance(data.get("result"), list)
+                else None
             ),
             "bytes": len(raw),
             "elapsed_ms": (time.monotonic_ns() - started) // 1_000_000,
@@ -260,15 +268,32 @@ def collect_r2(
     print(f"end:             {interval['end']}")
     print(f"extended:        {interval['extended_ownership_start']}")
     print(f"bytes:           {total_bytes}")
-    print("No Kubernetes mutation, risk classification, or product-semantic change was performed.")
+    print(
+        "No Kubernetes mutation, risk classification, or product-semantic change "
+        "was performed."
+    )
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Collect frozen PRAEVA SPIKE-003 R2 churn evidence")
-    parser.add_argument("--mutation-before", required=True, help="Unix seconds immediately before the single rollout patch")
-    parser.add_argument("--mutation-after", required=True, help="Unix seconds immediately after the single rollout patch returns")
-    parser.add_argument("--nonce", required=True, help="exact R2 annotation nonce used for the rollout")
+    parser = argparse.ArgumentParser(
+        description="Collect frozen PRAEVA SPIKE-003 R2 churn evidence"
+    )
+    parser.add_argument(
+        "--mutation-before",
+        required=True,
+        help="Unix seconds immediately before the single rollout patch",
+    )
+    parser.add_argument(
+        "--mutation-after",
+        required=True,
+        help="Unix seconds immediately after the single rollout patch returns",
+    )
+    parser.add_argument(
+        "--nonce",
+        required=True,
+        help="exact R2 annotation nonce used for the rollout",
+    )
     parser.add_argument(
         "--prometheus-url",
         default=collect.DEFAULT_PROMETHEUS_URL,
