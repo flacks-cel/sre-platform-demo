@@ -29,8 +29,12 @@ def compute_preflight_interval(now_seconds: int) -> dict[str, str]:
         "start": collect.canonical_decimal(start),
         "end": collect.canonical_decimal(end),
         "step": collect.canonical_decimal(collect.STEP),
-        "required_trailing_seconds": collect.canonical_decimal(REQUIRED_TRAILING_SECONDS),
-        "ingestion_lag_seconds": collect.canonical_decimal(collect.INGESTION_LAG),
+        "required_trailing_seconds": collect.canonical_decimal(
+            REQUIRED_TRAILING_SECONDS
+        ),
+        "ingestion_lag_seconds": collect.canonical_decimal(
+            collect.INGESTION_LAG
+        ),
     }
 
 
@@ -41,8 +45,17 @@ def run_preflight(*, prometheus_url: str, dry_run: bool) -> int:
     if dry_run:
         print("PRAEVA SPIKE-003 R2 CHURN PREFLIGHT DRY RUN")
         print("==========================================")
-        print(json.dumps({"run_id": RUN_ID, "interval": interval, "probes": probes}, indent=2, sort_keys=True))
-        print("No network I/O, Kubernetes mutation, or product-semantic decision was performed.")
+        print(
+            json.dumps(
+                {"run_id": RUN_ID, "interval": interval, "probes": probes},
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        print(
+            "No network I/O, Kubernetes mutation, or product-semantic decision "
+            "was performed."
+        )
         return 0
 
     start = Decimal(interval["start"])
@@ -66,7 +79,9 @@ def run_preflight(*, prometheus_url: str, dry_run: bool) -> int:
             end=interval["end"],
             step=interval["step"],
         )
-        missing = [timestamp for timestamp in grid if not presence.get(timestamp, False)]
+        missing = [
+            timestamp for timestamp in grid if not presence.get(timestamp, False)
+        ]
         probe_ready = not missing
         ready = ready and probe_ready
 
@@ -89,7 +104,9 @@ def run_preflight(*, prometheus_url: str, dry_run: bool) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="SPIKE-003 R2 churn series-availability preflight")
+    parser = argparse.ArgumentParser(
+        description="SPIKE-003 R2 churn series-availability preflight"
+    )
     parser.add_argument(
         "--prometheus-url",
         default=collect.DEFAULT_PROMETHEUS_URL,
@@ -106,7 +123,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     try:
-        return run_preflight(prometheus_url=args.prometheus_url, dry_run=args.dry_run)
+        return run_preflight(
+            prometheus_url=args.prometheus_url,
+            dry_run=args.dry_run,
+        )
     except (collect.CollectionError, preflight.PreflightError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
