@@ -199,3 +199,123 @@ This is evaluation-grid support coverage only. It does not prove continuous Kube
 The stable case is feasible on the pinned lab wire and query volume is small enough for raw replay evidence. The remaining spike work must exercise the cases where the stable assumptions break: young Pod support, UID change, TARGET_DIFFERS, selector omission, missing derived evidence, extra observed pods, churn, population-incomplete reasoning, and non-divisible window/step behavior.
 
 No Analyze/Join/Risk or product-semantic change is introduced by this finding.
+
+## F3 — TARGET_MATCH at every point does not prove identity continuity
+
+### Provenance
+
+Synthetic scenario `S3-uid-change`. The fixture is intentionally synthetic because the current lab target is a Deployment, whose replacement Pods normally receive different names. The scenario tests the evidence model at the Prometheus ownership-wire level rather than introducing a new workload kind into the spike.
+
+### Observation
+
+The same Pod name is represented by UID `pod-uid-a` on the first half of the support grid and UID `pod-uid-b` on the second half. Both UIDs resolve through their ReplicaSets to the same target `Deployment/jobs-api`.
+
+Every required per-timestamp ownership fact produced by the existing `WORKLOAD-OWNERSHIP-001` path is:
+
+```text
+evidence_status = VALID
+relation        = TARGET_MATCH
+```
+
+The experimental cross-timestamp reducer nevertheless returns:
+
+```text
+identity_continuity = NOT_PROVEN
+diagnostic          = uid_change_within_support_grid
+observed_uids       = [pod-uid-a, pod-uid-b]
+```
+
+A control subset containing only `pod-uid-a` returns `identity_continuity = PROVEN`.
+
+### Finding
+
+> Per-timestamp `TARGET_MATCH` ownership is not sufficient to prove that one Pod identity supports a rate-derived fact across its support grid.
+
+Ownership relation and identity continuity are therefore observably distinct questions under the candidate model.
+
+### Experimental consequence
+
+A future attribution layer cannot replace cross-timestamp identity reasoning with a boolean derived only from per-point ownership relation. No existing product contract is changed by this finding.
+
+## F4 — Post-creation stability does not prove support that begins before Pod creation
+
+### Provenance
+
+Synthetic scenario `S2-young-pod`.
+
+### Observation
+
+The fixture uses:
+
+```text
+support_start      = 0
+creation_timestamp = 10
+```
+
+At the support boundary there is no Pod-owner observation. From the first post-creation grid point onward, the same UID resolves consistently as `VALID/TARGET_MATCH`, and identity continuity over that post-creation subset is `PROVEN`.
+
+The independent creation-bound reducer returns:
+
+```text
+creation_bound = NOT_PROVEN
+diagnostic     = uid_not_present_at_support_start
+```
+
+because:
+
+```text
+creation_timestamp > support_start
+```
+
+### Finding
+
+> Stable target ownership after a Pod is created cannot retroactively prove that the same UID existed at the beginning of a rate support envelope.
+
+`kube_pod_created(uid) <= support_start` therefore contributes evidence that is not redundant with post-creation ownership-grid continuity.
+
+### Experimental consequence
+
+A future support-attribution contract needs an explicit existence-bound check in addition to same-UID and target-ownership checks. The diagnostic name remains spike vocabulary only, not a product reason code.
+
+## F5 — Selector omission is distinguishable from missing derived evidence
+
+### Provenance
+
+Synthetic scenario `S5-selector-omission`.
+
+### Observation
+
+At the tested timestamp, two Pods resolve through the real ownership path as `VALID/TARGET_MATCH` for `Deployment/jobs-api`:
+
+```text
+O(T) = {jobs-api-allowed-a, jobs-api-omitted-b}
+```
+
+The declared selector admits only the first Pod:
+
+```text
+S_target(T) = {jobs-api-allowed-a}
+```
+
+Therefore:
+
+```text
+selector_omissions(T) = {jobs-api-omitted-b}
+```
+
+For the tested Verify family, the observed evidence set is exactly the admitted selector set. Consequently:
+
+```text
+derived_evidence_missing = empty
+extra_observed           = empty
+```
+
+A control using a selector that admits both target Pods produces no omission.
+
+### Finding
+
+> Historical target-population scope can be evaluated independently from the Verify selector, and a selector omission can be named without misclassifying it as missing derived telemetry.
+
+### Experimental consequence
+
+The candidate population model must preserve separate set differences for `O(T) - S_target(T)` and `S_target(T) - V_q(T)`. The risk consequence of those differences remains out of scope for this spike.
