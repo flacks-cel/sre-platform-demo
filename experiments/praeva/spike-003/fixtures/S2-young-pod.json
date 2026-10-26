@@ -1,0 +1,78 @@
+{
+  "fixture_id": "S2-young-pod",
+  "provenance": "SYNTHETIC",
+  "purpose": "A target-owned pod is created inside a 2m rate support interval, so the creation bound must fail even though ownership is stable after creation.",
+  "why_synthetic": "The scenario depends on precise timing between pod creation and a rate witness. A deterministic wire-level fixture isolates the candidate kube_pod_created support-bound check from lab scheduling noise.",
+  "target": {
+    "api_group": "apps",
+    "kind": "Deployment",
+    "namespace": "app",
+    "name": "jobs-api"
+  },
+  "support": {
+    "support_start": "0",
+    "witness_timestamp": "120",
+    "window_seconds": "120"
+  },
+  "grid": {
+    "start": "0",
+    "end": "120",
+    "step": "15",
+    "required_timestamps": ["0", "15", "30", "45", "60", "75", "90", "105", "120"]
+  },
+  "pod": "jobs-api-young",
+  "uid": "pod-uid-young",
+  "pod_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "jobs-api-young",
+            "uid": "pod-uid-young",
+            "owner_kind": "ReplicaSet",
+            "owner_name": "jobs-api-rs-young",
+            "owner_is_controller": "true"
+          },
+          "values": [["15", "1"], ["30", "1"], ["45", "1"], ["60", "1"], ["75", "1"], ["90", "1"], ["105", "1"], ["120", "1"]]
+        }
+      ]
+    }
+  },
+  "replicaset_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "replicaset": "jobs-api-rs-young",
+            "owner_kind": "Deployment",
+            "owner_name": "jobs-api",
+            "owner_is_controller": "true"
+          },
+          "values": [["15", "1"], ["30", "1"], ["45", "1"], ["60", "1"], ["75", "1"], ["90", "1"], ["105", "1"], ["120", "1"]]
+        }
+      ]
+    }
+  },
+  "pod_created": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "jobs-api-young",
+            "uid": "pod-uid-young"
+          },
+          "values": [["15", "10"], ["30", "10"], ["45", "10"], ["60", "10"], ["75", "10"], ["90", "10"], ["105", "10"], ["120", "10"]]
+        }
+      ]
+    }
+  }
+}
