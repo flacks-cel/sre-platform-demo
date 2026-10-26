@@ -11,6 +11,7 @@ from praeva.ownership.prometheus_adapter import collect_ownership_evidence
 SPIKE_DIR = Path(__file__).resolve().parents[1]
 FIXTURE_S5 = SPIKE_DIR / "fixtures" / "S5-selector-omission.json"
 FIXTURE_S6 = SPIKE_DIR / "fixtures" / "S6-derived-evidence-missing.json"
+FIXTURE_S4_S7 = SPIKE_DIR / "fixtures" / "S4-S7-target-differs-extra-observed.json"
 POPULATION_MODEL = SPIKE_DIR / "population_model.py"
 
 
@@ -148,3 +149,39 @@ def test_s6_selector_admitted_missing_derived_evidence_is_detected() -> None:
     assert cpu_long["verify_observed"] == ["jobs-api-a", "jobs-api-b"]
     assert cpu_long["derived_evidence_missing"] == []
     assert cpu_long["extra_observed"] == []
+
+
+def test_s4_s7_target_differs_is_foreign_extra_observed_not_unknown() -> None:
+    fixture = _load_fixture(FIXTURE_S4_S7)
+    report = _report_from_fixture(fixture)
+    timestamp = fixture["grid"]["timestamp"]
+
+    target_fact = report["pods"]["jobs-api-a"]["ownership"][timestamp]
+    foreign_fact = report["pods"]["other-api-x"]["ownership"][timestamp]
+
+    assert target_fact["evidence_status"] == "VALID"
+    assert target_fact["relation"] == "TARGET_MATCH"
+    assert foreign_fact["evidence_status"] == "VALID"
+    assert foreign_fact["relation"] == "TARGET_DIFFERS"
+
+    verify = {
+        name: set(pods)
+        for name, pods in fixture["verify_pods_by_query"].items()
+    }
+    result = _population_model().evaluate_population_at_timestamp(
+        ownership_report=report,
+        timestamp=timestamp,
+        pod_regex=fixture["selector"],
+        verify_pods_by_query=verify,
+    )
+
+    assert result["target_owned"] == ["jobs-api-a"]
+    assert result["selector_admitted"] == ["jobs-api-a"]
+    assert result["selector_omissions"] == []
+
+    cpu_short = result["per_query"]["cpu_short"]
+    assert cpu_short["verify_observed"] == ["jobs-api-a", "other-api-x"]
+    assert cpu_short["derived_evidence_missing"] == []
+    assert cpu_short["extra_observed"] == ["other-api-x"]
+    assert cpu_short["foreign_target_differs"] == ["other-api-x"]
+    assert cpu_short["ownership_unresolved"] == []
