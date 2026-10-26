@@ -22,8 +22,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from praeva.ownership.historical import build_ownership_report
-from praeva.ownership.prometheus_adapter import collect_ownership_evidence
+from praeva.ownership.historical import build_ownership_report  # noqa: E402
+from praeva.ownership.prometheus_adapter import collect_ownership_evidence  # noqa: E402
 
 SPIKE_DIR = Path(__file__).resolve().parent
 SUPPORT_MODEL_PATH = SPIKE_DIR / "support_model.py"
@@ -206,7 +206,9 @@ def _creation_by_identity(payload: dict[str, Any]) -> dict[tuple[str, str], str]
     return output
 
 
-def _population_transitions(population_by_timestamp: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _population_transitions(
+    population_by_timestamp: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     transitions: list[dict[str, Any]] = []
     previous: tuple[str, ...] | None = None
     for timestamp in sorted(population_by_timestamp, key=Decimal):
@@ -590,7 +592,9 @@ def _print_summary(result: dict[str, Any], *, output_path: Path) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Analyze captured SPIKE-003 R2 churn evidence offline")
+    parser = argparse.ArgumentParser(
+        description="Analyze captured SPIKE-003 R2 churn evidence offline"
+    )
     parser.add_argument(
         "evidence_dir",
         type=Path,
