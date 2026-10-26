@@ -9,7 +9,8 @@ from praeva.ownership.historical import build_ownership_report
 from praeva.ownership.prometheus_adapter import collect_ownership_evidence
 
 SPIKE_DIR = Path(__file__).resolve().parents[1]
-FIXTURE = SPIKE_DIR / "fixtures" / "S5-selector-omission.json"
+FIXTURE_S5 = SPIKE_DIR / "fixtures" / "S5-selector-omission.json"
+FIXTURE_S6 = SPIKE_DIR / "fixtures" / "S6-derived-evidence-missing.json"
 POPULATION_MODEL = SPIKE_DIR / "population_model.py"
 
 
@@ -24,8 +25,8 @@ def _population_model():
     return module
 
 
-def _load_fixture() -> dict[str, Any]:
-    return json.loads(FIXTURE.read_text(encoding="utf-8"))
+def _load_fixture(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _report_from_fixture(fixture: dict[str, Any]) -> dict[str, Any]:
@@ -60,7 +61,7 @@ def _report_from_fixture(fixture: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_s5_selector_omission_is_distinct_from_missing_derived_evidence() -> None:
-    fixture = _load_fixture()
+    fixture = _load_fixture(FIXTURE_S5)
     report = _report_from_fixture(fixture)
     timestamp = fixture["grid"]["timestamp"]
 
@@ -96,7 +97,7 @@ def test_s5_selector_omission_is_distinct_from_missing_derived_evidence() -> Non
 
 
 def test_s5_control_full_selector_has_no_omission() -> None:
-    fixture = _load_fixture()
+    fixture = _load_fixture(FIXTURE_S5)
     report = _report_from_fixture(fixture)
     timestamp = fixture["grid"]["timestamp"]
 
@@ -116,3 +117,34 @@ def test_s5_control_full_selector_has_no_omission() -> None:
     assert result["selector_omissions"] == []
     assert result["per_query"]["cpu_short"]["derived_evidence_missing"] == []
     assert result["per_query"]["cpu_short"]["extra_observed"] == []
+
+
+def test_s6_selector_admitted_missing_derived_evidence_is_detected() -> None:
+    fixture = _load_fixture(FIXTURE_S6)
+    report = _report_from_fixture(fixture)
+    timestamp = fixture["grid"]["timestamp"]
+
+    verify = {
+        name: set(pods)
+        for name, pods in fixture["verify_pods_by_query"].items()
+    }
+    result = _population_model().evaluate_population_at_timestamp(
+        ownership_report=report,
+        timestamp=timestamp,
+        pod_regex=fixture["selector"],
+        verify_pods_by_query=verify,
+    )
+
+    assert result["target_owned"] == ["jobs-api-a", "jobs-api-b"]
+    assert result["selector_admitted"] == ["jobs-api-a", "jobs-api-b"]
+    assert result["selector_omissions"] == []
+
+    cpu_short = result["per_query"]["cpu_short"]
+    assert cpu_short["verify_observed"] == ["jobs-api-a"]
+    assert cpu_short["derived_evidence_missing"] == ["jobs-api-b"]
+    assert cpu_short["extra_observed"] == []
+
+    cpu_long = result["per_query"]["cpu_long"]
+    assert cpu_long["verify_observed"] == ["jobs-api-a", "jobs-api-b"]
+    assert cpu_long["derived_evidence_missing"] == []
+    assert cpu_long["extra_observed"] == []
