@@ -1,0 +1,70 @@
+{
+  "fixture_id": "S6-derived-evidence-missing",
+  "provenance": "SYNTHETIC",
+  "purpose": "A target-owned pod is admitted by the selector but lacks one Verify-derived fact, so missing derived evidence must remain distinct from selector omission.",
+  "target": {
+    "api_group": "apps",
+    "kind": "Deployment",
+    "namespace": "app",
+    "name": "jobs-api"
+  },
+  "grid": {
+    "start": "30",
+    "end": "30",
+    "step": "15",
+    "timestamp": "30"
+  },
+  "selector": "jobs-api-.*",
+  "pod_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "jobs-api-a",
+            "uid": "pod-uid-a",
+            "owner_kind": "ReplicaSet",
+            "owner_name": "jobs-api-rs-a",
+            "owner_is_controller": "true"
+          },
+          "values": [["30", "1"]]
+        },
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "jobs-api-b",
+            "uid": "pod-uid-b",
+            "owner_kind": "ReplicaSet",
+            "owner_name": "jobs-api-rs-a",
+            "owner_is_controller": "true"
+          },
+          "values": [["30", "1"]]
+        }
+      ]
+    }
+  },
+  "replicaset_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "replicaset": "jobs-api-rs-a",
+            "owner_kind": "Deployment",
+            "owner_name": "jobs-api",
+            "owner_is_controller": "true"
+          },
+          "values": [["30", "1"]]
+        }
+      ]
+    }
+  },
+  "verify_pods_by_query": {
+    "cpu_short": ["jobs-api-a"],
+    "cpu_long": ["jobs-api-a", "jobs-api-b"]
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "fixture_id": "S4-S7-target-differs-extra-observed",
+  "provenance": "SYNTHETIC",
+  "purpose": "A Verify-observed pod resolves VALID/TARGET_DIFFERS to another Deployment, so it must be extra_observed and specifically foreign_target_differs rather than ownership UNKNOWN.",
+  "target": {
+    "api_group": "apps",
+    "kind": "Deployment",
+    "namespace": "app",
+    "name": "jobs-api"
+  },
+  "grid": {
+    "start": "30",
+    "end": "30",
+    "step": "15",
+    "timestamp": "30"
+  },
+  "selector": ".*",
+  "pod_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "jobs-api-a",
+            "uid": "pod-uid-a",
+            "owner_kind": "ReplicaSet",
+            "owner_name": "jobs-api-rs-a",
+            "owner_is_controller": "true"
+          },
+          "values": [["30", "1"]]
+        },
+        {
+          "metric": {
+            "namespace": "app",
+            "pod": "other-api-x",
+            "uid": "pod-uid-x",
+            "owner_kind": "ReplicaSet",
+            "owner_name": "other-api-rs-x",
+            "owner_is_controller": "true"
+          },
+          "values": [["30", "1"]]
+        }
+      ]
+    }
+  },
+  "replicaset_owner": {
+    "status": "success",
+    "data": {
+      "resultType": "matrix",
+      "result": [
+        {
+          "metric": {
+            "namespace": "app",
+            "replicaset": "jobs-api-rs-a",
+            "owner_kind": "Deployment",
+            "owner_name": "jobs-api",
+            "owner_is_controller": "true"
+          },
+          "values": [["30", "1"]]
+        },
+        {
+          "metric": {
+            "namespace": "app",
+            "replicaset": "other-api-rs-x",
+            "owner_kind": "Deployment",
+            "owner_name": "other-api",
+            "owner_is_controller": "true"
+          },
+          "values": [["30", "1"]]
+        }
+      ]
+    }
+  },
+  "verify_pods_by_query": {
+    "cpu_short": ["jobs-api-a", "other-api-x"]
+  }
+}

@@ -300,6 +300,31 @@ classification_basis = short_window_only_contradiction
 
 Throttling não modula esse `HIGH`.
 
+#### Limitação conhecida — completude de `joined.pods` não é provada
+
+A frase “todas as janelas long de todos os pods” acima é quantificada apenas sobre os pods presentes em `joined.pods`. A implementação atual não prova que esse conjunto contém toda a população histórica atribuível ao Deployment alvo.
+
+Enquanto `identity_assertion.status=CALLER_ASSERTED` e `workload_to_pod_selector_relation=UNVERIFIED`, um selector pode omitir um pod real do workload sem que `CHANGE-RISK-001` perceba a omissão.
+
+O SPIKE-003, cenário sintético `S9-population-incomplete-high`, demonstrou essa limitação contra a implementação real de `CHANGE-RISK-001`:
+
+```text
+proposed = 350m
+
+subset observado:
+A: short=400m, long=300m
+B: short=300m, long=300m
+=> HIGH / short_window_only_contradiction
+
+população completa adiciona C:
+C: short=300m, long=500m
+=> CRITICAL / sustained_window_contradiction
+```
+
+Portanto, a versão atual pode subestimar `CRITICAL` como `HIGH` quando `joined.pods` é uma população incompleta do Deployment. Isso é uma limitação conhecida da integração atual, não uma mudança da escada `CHANGE-RISK-001`: `CRITICAL` continua existencial, enquanto emitir `HIGH` com segurança exige excluir contradição long na população relevante completa.
+
+Até existir uma prova de atribuição/completude populacional integrada antes desta regra, um resultado `HIGH` depende implicitamente da suposição de que `joined.pods` representa toda a população relevante. O SPIKE-003 está investigando a camada que deve tornar essa precondição explícita.
+
 ### 8.5 Antes de MEDIUM/LOW, CPU precisa ser completa
 
 Se não existe contradição short/long conhecida, `MEDIUM` ou `LOW` só podem ser emitidos se short e long forem `VALID` para todos os pods.

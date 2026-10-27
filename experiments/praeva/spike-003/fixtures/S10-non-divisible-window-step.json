@@ -1,0 +1,21 @@
+{
+  "fixture_id": "S10-non-divisible-window-step",
+  "provenance": "SYNTHETIC",
+  "purpose": "Verify that phase-aligned ownership extension preserves the Verify grid when W_max is not divisible by step, while a support_start between ownership points is reported instead of silently rounded into proof.",
+  "geometry": {
+    "analysis_start": "600",
+    "analysis_end": "660",
+    "step": "15",
+    "w_max_seconds": "125",
+    "witness_timestamp": "600",
+    "window_seconds": "125"
+  },
+  "expected": {
+    "extension_steps": "9",
+    "extended_ownership_start": "465",
+    "support_start": "475",
+    "first_support_grid_point": "480",
+    "support_boundary_on_grid": false,
+    "diagnostic": "support_boundary_not_on_grid"
+  }
+}

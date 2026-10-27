@@ -1,0 +1,26 @@
+{
+  "fixture_id": "S9-population-incomplete-high",
+  "provenance": "SYNTHETIC",
+  "purpose": "Demonstrate that subset-only HIGH reasoning is unsafe when an omitted target pod contains a long-window contradiction that makes the complete population CRITICAL.",
+  "proposed_limit_millicores": "350",
+  "margin": {
+    "numerator": 11,
+    "denominator": 10
+  },
+  "observed_population": ["pod-a", "pod-b"],
+  "complete_population": ["pod-a", "pod-b", "pod-c"],
+  "pods": {
+    "pod-a": {
+      "short_millicores": "400",
+      "long_millicores": "300"
+    },
+    "pod-b": {
+      "short_millicores": "300",
+      "long_millicores": "300"
+    },
+    "pod-c": {
+      "short_millicores": "300",
+      "long_millicores": "500"
+    }
+  }
+}

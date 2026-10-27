@@ -51,3 +51,6 @@ kubeconfig
 
 # Local script backups
 *.backup
+
+# Praeva local experiment captures
+experiments/praeva/spike-003/evidence/
