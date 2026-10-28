@@ -82,7 +82,7 @@ def _fact(
             "nominal": nominal or _support(),
             "observed_sample": observed_sample,
         },
-        "creation_timestamp": creation_timestamp,
+        "creation_by_uid": {"uid-a": creation_timestamp},
     }
     if extra:
         result.update(extra)
