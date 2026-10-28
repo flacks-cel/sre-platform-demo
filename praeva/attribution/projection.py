@@ -5,7 +5,7 @@ from typing import Any
 
 
 class AttributionDecisionInputError(ValueError):
-    """Raised when ATTRIBUTION-DECISION-001 inputs violate the frozen contract."""
+    """Raised when attribution-decision inputs violate the frozen contract."""
 
 
 def _decimal(value: Any, *, field: str) -> Decimal:
@@ -115,6 +115,20 @@ def _support_is_subset(
     return nominal_start <= observed_start and observed_end <= nominal_end
 
 
+def _validate_creation_by_uid(value: Any, *, field: str) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise AttributionDecisionInputError(f"{field} must be an object")
+
+    result: dict[str, str] = {}
+    for raw_uid, raw_timestamp in value.items():
+        uid = _non_empty_string(raw_uid, field=f"{field} uid")
+        result[uid] = _canonical_decimal(
+            raw_timestamp,
+            field=f"{field}.{uid}",
+        )
+    return result
+
+
 def _validate_fact(value: Any, *, index: int) -> dict[str, Any]:
     field = f"facts[{index}]"
     if not isinstance(value, dict):
@@ -130,9 +144,9 @@ def _validate_fact(value: Any, *, index: int) -> dict[str, Any]:
         value.get("evaluated_at"),
         field=f"{field}.evaluated_at",
     )
-    creation_timestamp = _canonical_decimal(
-        value.get("creation_timestamp"),
-        field=f"{field}.creation_timestamp",
+    creation_by_uid = _validate_creation_by_uid(
+        value.get("creation_by_uid"),
+        field=f"{field}.creation_by_uid",
     )
 
     support = value.get("support")
@@ -160,7 +174,7 @@ def _validate_fact(value: Any, *, index: int) -> dict[str, Any]:
         "evidence_family": evidence_family,
         "evaluated_at": evaluated_at,
         "support": {"nominal": nominal, "observed_sample": observed},
-        "creation_timestamp": creation_timestamp,
+        "creation_by_uid": creation_by_uid,
     }
 
 
@@ -368,9 +382,18 @@ def _project_fact(
             evidence_refs=evidence_refs,
         )
 
+    uid = next(iter(uids))
+    creation_text = fact["creation_by_uid"].get(uid)
+    if creation_text is None:
+        return _unattributed(
+            "attribution_unproven",
+            support_source=support_source,
+            evidence_refs=evidence_refs,
+        )
+
     creation = _decimal(
-        fact["creation_timestamp"],
-        field=f"facts.{fact['fact_id']}.creation_timestamp",
+        creation_text,
+        field=f"facts.{fact['fact_id']}.creation_by_uid.{uid}",
     )
     support_start = _decimal(
         support["start"],
