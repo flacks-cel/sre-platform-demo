@@ -115,7 +115,7 @@ def _validate_queries(
     *,
     short_window: str,
     long_window: str,
-) -> None:
+) -> dict[str, Any]:
     queries = _mapping(normalized.get("queries"), field="normalized_evidence.queries")
     expected_windows = {
         "cpu_short": short_window,
@@ -136,6 +136,7 @@ def _validate_queries(
     limit_query = queries.get("cpu_limit")
     if limit_query is not None:
         _mapping(limit_query, field="normalized_evidence.queries.cpu_limit")
+    return queries
 
 
 def _validate_creation_by_pod_uid(value: Any) -> dict[str, dict[str, str]]:
@@ -192,6 +193,21 @@ def _series_points(pod: dict[str, Any], *, family: str, pod_name: str) -> list[d
             )
         points.append(point)
     return points
+
+
+def _validate_family_query(
+    *,
+    queries: dict[str, Any],
+    family: str,
+) -> None:
+    query = queries.get(family)
+    if query is None:
+        raise AttributionFactInputError(f"emitted family {family} is missing query provenance")
+    query_map = _mapping(query, field=f"normalized_evidence.queries.{family}")
+    _non_empty_string(
+        query_map.get("promql"),
+        field=f"normalized_evidence.queries.{family}.promql",
+    )
 
 
 def _validate_sample_timestamp(
@@ -283,7 +299,7 @@ def build_attribution_fact_inputs(
     )
     short_seconds = _duration_seconds(short_window, field="normalized_evidence.short_window")
     long_seconds = _duration_seconds(long_window, field="normalized_evidence.long_window")
-    _validate_queries(
+    queries = _validate_queries(
         normalized,
         short_window=short_window,
         long_window=long_window,
@@ -311,8 +327,14 @@ def build_attribution_fact_inputs(
         creation_map = dict(creation.get(pod_name, {}))
         for family in sorted(_SUPPORTED_FAMILIES):
             points = _series_points(pod, family=family, pod_name=pod_name)
+            if points:
+                _validate_family_query(queries=queries, family=family)
             seen_timestamps: set[Decimal] = set()
             for index, point in enumerate(points):
+                if point.get("query_key") != family:
+                    raise AttributionFactInputError(
+                        f"pods.{pod_name}.{family}[{index}].query_key must equal {family}"
+                    )
                 timestamp, timestamp_text = _validate_sample_timestamp(
                     point.get("timestamp"),
                     field=f"pods.{pod_name}.{family}[{index}].timestamp",
