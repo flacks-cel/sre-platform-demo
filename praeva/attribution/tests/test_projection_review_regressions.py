@@ -72,7 +72,7 @@ def _fact(*, observed_sample: dict | None = None, nominal: dict | None = None) -
             "nominal": nominal or _support(),
             "observed_sample": observed_sample,
         },
-        "creation_timestamp": "-100",
+        "creation_by_uid": {"uid-a": "-100"},
     }
 
 
