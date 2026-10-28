@@ -13,7 +13,8 @@
 ## 1. Pergunta
 
 > Dados os diagnósticos de atribuição produzidos sobre a evidência histórica, quais fatos podem ser
-> usados, quais níveis de risco ainda são demonstráveis, e a análise como um todo é admissível?
+> usados, quais níveis de risco ainda podem ser demonstrados pela regra, e a análise como um todo é
+> admissível?
 
 O SPIKE-003 produziu diagnósticos ricos de ownership, continuidade de identidade, suporte,
 selector scope, evidência derivada e completude populacional. O consumidor precisa de uma superfície
@@ -21,9 +22,20 @@ menor. Este contrato é **o mapeamento entre as duas coisas** — e nada além d
 
 ### 1.1 Vocabulário
 
-Diz-se **demonstrável**, nunca "provável". O Praeva não estima probabilidade. Um nível é demonstrável
-quando a evidência adquirida satisfaz a forma lógica daquele degrau; caso contrário, não é
- demonstrável.
+Diz-se **demonstrável**, nunca "provável". O Praeva não estima probabilidade.
+
+Esta camada, porém, não classifica risco. Para cada nível ela produz apenas:
+
+```text
+ELIGIBLE | BLOCKED
+```
+
+`ELIGIBLE` significa: **atribuição e completude populacional não impedem a regra de demonstrar esse
+nível**. Ainda cabe à regra verificar o próprio predicate, witness, censura, cobertura e demais
+precondições.
+
+`BLOCKED` significa: mesmo que o predicate observado pareça satisfazer o nível, a prova exigida pela
+forma lógica declarada não é válida com o domínio disponível.
 
 ---
 
@@ -33,7 +45,7 @@ quando a evidência adquirida satisfaz a forma lógica daquele degrau; caso cont
 |---|---|---|
 | **Análise** | `ADMISSIBLE` \| `INADMISSIBLE(reason)` | o domínio alvo é determinável? |
 | **Fato** | `ATTRIBUTED` \| `UNATTRIBUTED(class)` | este fato pertence ao alvo? |
-| **Escada** | subconjunto dos níveis declarados pela regra | quais degraus continuam demonstráveis? |
+| **Escada** | `ELIGIBLE` \| `BLOCKED` por nível | atribuição/população permitem que a regra prove este degrau? |
 
 Um diagnóstico pode alimentar mais de um escopo, e diagnósticos diferentes podem produzir a mesma
 consequência. O mapeamento não é bijetivo; por isso ele merece contrato próprio.
@@ -51,10 +63,10 @@ consequência. O mapeamento não é bijetivo; por isso ele merece contrato próp
 Um fato pode ser atribuído e ter cobertura parcial. Pode ter cobertura completa e não ser atribuído.
 Pode ser atribuído e bem formado, mas censurado por throttling.
 
-Esta camada responde **apenas à atribuição**. Ela não altera, rebaixa, compensa nem reinterpreta
-cobertura ou censura.
+Esta camada responde **apenas à atribuição** e à consequência de completude populacional sobre a
+forma lógica declarada. Ela não altera, rebaixa, compensa nem reinterpreta cobertura ou censura.
 
-### 3.1 Ler metadados de cobertura não autoriza inferir suporte amostral
+### 3.1 Metadados de cobertura não provam suporte amostral
 
 O wire atual do Verify publica cobertura como contagem de pontos de resultado da `query_range`
 (`observed_points` versus `expected_points`). Esse campo **não prova** quais amostras cruas dentro de
@@ -135,20 +147,26 @@ degrau. A projeção não importa, não referencia e não nomeia nenhuma regra.
 
 Regra genérica:
 
-> Um degrau com componente `forall` só é demonstrável quando o domínio da quantificação está completo.
-> Degraus puramente existenciais podem sobreviver à incompletude.
+> Um degrau com componente `FORALL` só é `ELIGIBLE` quando o domínio daquela cláusula está completo.
+> Uma cláusula `EXISTS` não é bloqueada apenas porque a população está incompleta.
+
+Importante: `EXISTS` não bloqueado **não significa witness encontrado**. Significa apenas que
+incompletude populacional não invalida um witness positivo que a regra venha a encontrar entre fatos
+atribuídos.
 
 Para CHANGE-RISK-001, a declaração conceitual que a regra passaria é:
 
 | Degrau | Forma |
 |---|---|
-| `CRITICAL` | `exists` witness longo com contradição |
-| `HIGH` | `exists` witness curto com contradição **and** `forall` longas sem contradição |
-| `MEDIUM` / `LOW` | `forall` sem contradição na população relevante |
+| `CRITICAL` | `EXISTS` witness longo com contradição |
+| `HIGH` | `EXISTS` witness curto com contradição **and** `FORALL` longas sem contradição |
+| `MEDIUM` / `LOW` | `FORALL` sem contradição na população relevante |
 
-Com população incompleta, apenas níveis cuja prova não depende de universal sobre esse domínio
-permanecem demonstráveis. Isso transforma o S9 em invariante genérico, sem codificar
-`cpu_limit_insufficiency` nesta camada.
+Com população incompleta no domínio `cpu_long`, `CRITICAL` pode continuar `ELIGIBLE`, enquanto
+`HIGH`, `MEDIUM` e `LOW` ficam `BLOCKED` pelas cláusulas universais relevantes. A regra ainda decide se
+há ou não witness/contradição.
+
+Isso transforma o S9 em invariante genérico, sem codificar `cpu_limit_insufficiency` nesta camada.
 
 ---
 
@@ -167,8 +185,8 @@ usar. O diagnóstico original continua disponível para auditoria e ação human
 | `created(uid) > support_start` | Fato | `UNATTRIBUTED(support_predates_pod)` |
 | Fronteira necessária fora da grade de ownership | Fato | `UNATTRIBUTED(support_boundary_unproven)` |
 | Suporte relevante não provado pelo wire disponível | Fato | `UNATTRIBUTED(attribution_unproven)` |
-| Omissão do selector, `O(T) - S_target(T)` | Escada | `population_evidence_incomplete` |
-| Evidência derivada ausente, `S_target(T) - V_q(T)` | Escada | `population_evidence_incomplete` |
+| Omissão do selector, `O(T) - S_target(T)` | Escada | domínio afetado `INCOMPLETE` |
+| Evidência derivada ausente, `S_target(T) - V_q(T)` | Escada | domínio/família afetado `INCOMPLETE` |
 
 ### 6.1 Pod estrangeiro é fato, não análise
 
@@ -192,7 +210,7 @@ desta projeção.
 
 Selector omission e derived evidence missing têm causas e remédios diferentes, mas a mesma
 consequência lógica: existe membro da população relevante sem evidência suficiente para sustentar
-afirmações universais.
+afirmações universais naquele domínio.
 
 A regra não precisa conhecer a taxonomia diagnóstica para decidir. A distinção permanece disponível na
 provenance para acionabilidade humana.
@@ -227,6 +245,7 @@ e não "evidência insuficiente".
 | 4 | Módulo | `praeva/attribution/projection.py` |
 | 5 | Suporte sem prova amostral explícita | usar `nominal_support` conservadoramente |
 | 6 | `coverage_complete` | nunca prova raw-sample support |
+| 7 | Escada | `ELIGIBLE/BLOCKED` é gate de prova, nunca classificação de risco |
 
 ### 8.1 Critério de `target_domain_undeterminable`
 
@@ -238,7 +257,7 @@ A projeção **não infere** `target_domain_undeterminable` a partir de:
 - `TARGET_DIFFERS` de um Pod estrangeiro;
 - população parcial em um timestamp.
 
-Ela recebe um diagnóstico explícito de uma camada produtora com estado equivalente a:
+Ela recebe um diagnóstico explícito de uma camada produtora:
 
 ```text
 target_domain_status = DETERMINED | UNDETERMINABLE
@@ -265,6 +284,124 @@ efetivo compartilham atribuição só porque pertencem ao mesmo Pod ou à mesma 
 Uma família pode ter suporte distinto ou prova de suporte diferente de outra. Atribuição de uma nunca
 contamina automaticamente a outra.
 
+### 8.3 Interface pura congelada
+
+A implementação futura expõe:
+
+```python
+project_attribution_decision(
+    *,
+    target_domain_status: str,
+    ownership_report: dict,
+    facts: list[dict],
+    population_evidence: dict,
+    level_requirements: dict,
+) -> dict
+```
+
+Input estrutural inválido levanta `AttributionDecisionInputError`. Não vira `UNATTRIBUTED`,
+`INADMISSIBLE` nem `BLOCKED`.
+
+Floats são proibidos em timestamps/suportes. Timestamps usam string decimal canônica ou inteiro, como
+nos contratos existentes.
+
+#### `facts`
+
+Cada fato contém no mínimo:
+
+```json
+{
+  "fact_id": "cpu_short:pod-a:100",
+  "pod": "pod-a",
+  "evidence_family": "cpu_short",
+  "evaluated_at": "100",
+  "support": {
+    "nominal": {
+      "start": "-20",
+      "end": "100",
+      "required_timestamps": ["0", "15", "30"],
+      "boundary_proven": true
+    },
+    "observed_sample": null
+  },
+  "creation_timestamp": "-100"
+}
+```
+
+`observed_sample`, quando presente, tem a mesma forma de `nominal` e é explicitamente preferido pela
+§4.1. `required_timestamps` é a grade de ownership requerida para aquele suporte; esta camada não
+reconstrói PromQL nem inventa pontos intermediários.
+
+`ownership_report` é o output de WORKLOAD-OWNERSHIP-001 e fornece os fatos por Pod/timestamp usados
+pelo critério da §4.3.
+
+#### `population_evidence`
+
+Mapa por domínio lógico/família que a regra pode referenciar:
+
+```json
+{
+  "cpu_short": {"status": "COMPLETE", "diagnostics": []},
+  "cpu_long": {
+    "status": "INCOMPLETE",
+    "diagnostics": ["selector_omission"]
+  }
+}
+```
+
+A projeção lê apenas `COMPLETE | INCOMPLETE` para gating; `diagnostics` são preservados para auditoria,
+não entram na lógica.
+
+#### `level_requirements`
+
+Forma genérica declarada pela regra:
+
+```json
+{
+  "CRITICAL": [
+    {"quantifier": "EXISTS", "domain": "cpu_long"}
+  ],
+  "HIGH": [
+    {"quantifier": "EXISTS", "domain": "cpu_short"},
+    {"quantifier": "FORALL", "domain": "cpu_long"}
+  ]
+}
+```
+
+Quantificadores permitidos nesta versão: `EXISTS | FORALL`.
+
+A projeção marca um nível `BLOCKED` quando qualquer cláusula `FORALL` referencia domínio que não está
+`COMPLETE`. Uma cláusula `EXISTS` nunca é bloqueada **somente** por incompletude populacional.
+
+A projeção não avalia o predicate da regra e não decide se um witness existe.
+
+### 8.4 Output mínimo
+
+```json
+{
+  "analysis": {"status": "ADMISSIBLE"},
+  "facts": {
+    "cpu_short:pod-a:100": {
+      "status": "ATTRIBUTED",
+      "support_source": "NOMINAL",
+      "evidence_refs": []
+    }
+  },
+  "level_eligibility": {
+    "CRITICAL": {"status": "ELIGIBLE", "blocked_by": []},
+    "HIGH": {
+      "status": "BLOCKED",
+      "blocked_by": ["population_incomplete:cpu_long"]
+    }
+  },
+  "population_evidence": {}
+}
+```
+
+Quando `analysis.status=INADMISSIBLE`, `reason` é obrigatório. O resultado continua estruturalmente
+completo para auditoria; esta camada não lança erro apenas porque o domínio é semanticamente
+indeterminável.
+
 ---
 
 ## 9. Plano de teste — RED antes de GREEN
@@ -273,27 +410,29 @@ Os cenários do SPIKE-003 viram casos da projeção. O que se testa é o mapeame
 
 | # | Entrada | Esperado |
 |---|---|---|
-| 1 | R1 estável, nominal support inteiramente target-match | `ADMISSIBLE`, fatos `ATTRIBUTED`, escada completa |
+| 1 | R1 estável, nominal support inteiramente target-match | `ADMISSIBLE`, fatos `ATTRIBUTED`, níveis não bloqueados por população |
 | 2 | S2 young Pod | `UNATTRIBUTED(support_predates_pod)`; análise admissível |
 | 3 | S3 UID change | `UNATTRIBUTED(identity_discontinuity)` mesmo com `TARGET_MATCH` por ponto |
 | 4 | S4/S7 Pod estrangeiro | `UNATTRIBUTED(foreign_workload)`; excluído; análise admissível |
-| 5 | S5 selector omission | admissível; níveis com universal sobre população ficam não demonstráveis |
-| 6 | S6 derived evidence missing | mesma projeção de completude que o caso 5 |
-| 7 | S9 população incompleta | níveis existenciais podem sobreviver; níveis dependentes de universal ficam bloqueados |
+| 5 | S5 selector omission | cláusulas `FORALL` do domínio afetado ficam `BLOCKED` |
+| 6 | S6 derived evidence missing | mesma consequência de gating que o caso 5 |
+| 7 | S9 `cpu_long` incompleto | `CRITICAL` `ELIGIBLE`; `HIGH` bloqueado pelo `FORALL cpu_long` |
 | 8 | S10 fronteira fora da grade | `UNATTRIBUTED(support_boundary_unproven)` no fato; análise admissível |
 | 9 | R2 rate residual com wire atual e ownership não provado no nominal support | `UNATTRIBUTED(attribution_unproven)` |
 | 10 | Mesmo residual, mas producer fornece `observed_sample_support` explícito e todo target-match | `ATTRIBUTED` |
-| 11 | `coverage_complete=true` sem sample support explícito | não encurta nem redefine o suporte; regra da §4.1 permanece |
+| 11 | `coverage_complete=true` fora desta interface | não altera suporte nem atribuição; nenhuma dependência desse campo |
 | 12 | Mesma janela, CPU e throttling com support descriptors diferentes | atribuições independentes por família |
-| 13 | `target_domain_status=UNDETERMINABLE` | `INADMISSIBLE(target_domain_undeterminable)`, exit 0 |
+| 13 | `target_domain_status=UNDETERMINABLE` | `INADMISSIBLE(target_domain_undeterminable)`, exit semântico 0 |
 | 14 | `target_domain_status=DETERMINED` com população vazia | `ADMISSIBLE`; não confundir vazio com desconhecido |
+| 15 | `level_requirements` com regra/nome arbitrário | mesma lógica; nenhuma dependência de CHANGE-RISK-001 |
+| 16 | timestamp em float | `AttributionDecisionInputError` |
 
 Os casos 9 e 10 travam a correção principal do R2: membership instantânea em T não decide, mas a
 camada também não inventa suporte amostral para promover o fato.
 
 Os casos 5, 6 e 7 travam a projeção por quantificador. O caso 11 impede que `coverage_complete` ganhe
 semântica que o wire atual não publica. Os casos 13 e 14 separam domínio desconhecido de população
-vazia.
+vazia. O caso 15 protege a genericidade para o segundo hazard.
 
 ---
 
@@ -301,6 +440,7 @@ vazia.
 
 - [x] Seção 8 resolvida
 - [x] Pré-registração commitada antes de implementação
+- [x] Interface pura congelada antes do RED
 - [ ] Nenhuma referência a `cpu_limit_insufficiency`, ou a qualquer regra concreta, no código da projeção
 - [ ] Nenhum vocabulário de diagnóstico do SPIKE-003 cruza para o consumidor além do mapeamento deste contrato
 - [ ] Atribuição nunca altera cobertura nem censura
