@@ -54,8 +54,7 @@ def _validate_target_domain_status(value: Any) -> str:
 def _validate_ownership_report(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise AttributionDecisionInputError("ownership_report must be an object")
-    pods = value.get("pods")
-    if not isinstance(pods, dict):
+    if not isinstance(value.get("pods"), dict):
         raise AttributionDecisionInputError("ownership_report.pods must be an object")
     return value
 
@@ -74,6 +73,10 @@ def _validate_support_descriptor(value: Any, *, field: str) -> dict[str, Any]:
     required = value.get("required_timestamps")
     if not isinstance(required, list):
         raise AttributionDecisionInputError(f"{field}.required_timestamps must be a list")
+    if not required:
+        raise AttributionDecisionInputError(
+            f"{field}.required_timestamps must contain at least one timestamp"
+        )
 
     canonical_by_value: dict[Decimal, str] = {}
     for raw_timestamp in required:
@@ -101,6 +104,17 @@ def _validate_support_descriptor(value: Any, *, field: str) -> dict[str, Any]:
     }
 
 
+def _support_is_subset(
+    observed: dict[str, Any],
+    nominal: dict[str, Any],
+) -> bool:
+    observed_start = _decimal(observed["start"], field="observed_sample.start")
+    observed_end = _decimal(observed["end"], field="observed_sample.end")
+    nominal_start = _decimal(nominal["start"], field="nominal.start")
+    nominal_end = _decimal(nominal["end"], field="nominal.end")
+    return nominal_start <= observed_start and observed_end <= nominal_end
+
+
 def _validate_fact(value: Any, *, index: int) -> dict[str, Any]:
     field = f"facts[{index}]"
     if not isinstance(value, dict):
@@ -124,27 +138,28 @@ def _validate_fact(value: Any, *, index: int) -> dict[str, Any]:
     support = value.get("support")
     if not isinstance(support, dict):
         raise AttributionDecisionInputError(f"{field}.support must be an object")
+
     nominal = _validate_support_descriptor(
         support.get("nominal"),
         field=f"{field}.support.nominal",
     )
-    observed_raw = support.get("observed_sample")
     observed = None
-    if observed_raw is not None:
+    if support.get("observed_sample") is not None:
         observed = _validate_support_descriptor(
-            observed_raw,
+            support["observed_sample"],
             field=f"{field}.support.observed_sample",
         )
+        if not _support_is_subset(observed, nominal):
+            raise AttributionDecisionInputError(
+                f"{field}.support.observed_sample must be within nominal support"
+            )
 
     return {
         "fact_id": fact_id,
         "pod": pod,
         "evidence_family": evidence_family,
         "evaluated_at": evaluated_at,
-        "support": {
-            "nominal": nominal,
-            "observed_sample": observed,
-        },
+        "support": {"nominal": nominal, "observed_sample": observed},
         "creation_timestamp": creation_timestamp,
     }
 
@@ -234,13 +249,12 @@ def _validate_level_requirements(
     return result
 
 
-def _ownership_for_fact(
+def _ownership_for_pod(
     ownership_report: dict[str, Any],
     *,
     pod: str,
 ) -> dict[str, Any] | None:
-    pods = ownership_report["pods"]
-    pod_report = pods.get(pod)
+    pod_report = ownership_report["pods"].get(pod)
     if pod_report is None:
         return None
     if not isinstance(pod_report, dict):
@@ -265,7 +279,7 @@ def _unattributed(
         "status": "UNATTRIBUTED",
         "class": classification,
         "support_source": support_source,
-        "evidence_refs": list(evidence_refs or []),
+        "evidence_refs": sorted(set(evidence_refs or [])),
     }
 
 
@@ -275,12 +289,8 @@ def _project_fact(
     ownership_report: dict[str, Any],
 ) -> dict[str, Any]:
     observed = fact["support"]["observed_sample"]
-    if observed is not None:
-        support = observed
-        support_source = "OBSERVED_SAMPLE"
-    else:
-        support = fact["support"]["nominal"]
-        support_source = "NOMINAL"
+    support = observed if observed is not None else fact["support"]["nominal"]
+    support_source = "OBSERVED_SAMPLE" if observed is not None else "NOMINAL"
 
     if not support["boundary_proven"]:
         return _unattributed(
@@ -288,7 +298,7 @@ def _project_fact(
             support_source=support_source,
         )
 
-    ownership = _ownership_for_fact(ownership_report, pod=fact["pod"])
+    ownership = _ownership_for_pod(ownership_report, pod=fact["pod"])
     if ownership is None:
         return _unattributed(
             "attribution_unproven",
@@ -298,15 +308,15 @@ def _project_fact(
     ownership_facts: list[dict[str, Any]] = []
     evidence_refs: list[str] = []
     for timestamp in support["required_timestamps"]:
-        raw_ownership_fact = ownership.get(timestamp)
-        if not isinstance(raw_ownership_fact, dict):
+        ownership_fact = ownership.get(timestamp)
+        if not isinstance(ownership_fact, dict):
             return _unattributed(
                 "attribution_unproven",
                 support_source=support_source,
                 evidence_refs=evidence_refs,
             )
-        ownership_facts.append(raw_ownership_fact)
-        raw_refs = raw_ownership_fact.get("evidence_refs", [])
+        ownership_facts.append(ownership_fact)
+        raw_refs = ownership_fact.get("evidence_refs", [])
         if isinstance(raw_refs, list):
             evidence_refs.extend(
                 ref for ref in raw_refs if isinstance(ref, str) and ref
@@ -316,7 +326,7 @@ def _project_fact(
         return _unattributed(
             "attribution_unproven",
             support_source=support_source,
-            evidence_refs=sorted(set(evidence_refs)),
+            evidence_refs=evidence_refs,
         )
 
     uids: set[str] = set()
@@ -326,14 +336,14 @@ def _project_fact(
             return _unattributed(
                 "attribution_unproven",
                 support_source=support_source,
-                evidence_refs=sorted(set(evidence_refs)),
+                evidence_refs=evidence_refs,
             )
         uid = identity.get("uid")
         if not isinstance(uid, str) or not uid:
             return _unattributed(
                 "attribution_unproven",
                 support_source=support_source,
-                evidence_refs=sorted(set(evidence_refs)),
+                evidence_refs=evidence_refs,
             )
         uids.add(uid)
 
@@ -341,7 +351,7 @@ def _project_fact(
         return _unattributed(
             "identity_discontinuity",
             support_source=support_source,
-            evidence_refs=sorted(set(evidence_refs)),
+            evidence_refs=evidence_refs,
         )
 
     relations = {item.get("relation") for item in ownership_facts}
@@ -349,13 +359,13 @@ def _project_fact(
         return _unattributed(
             "foreign_workload",
             support_source=support_source,
-            evidence_refs=sorted(set(evidence_refs)),
+            evidence_refs=evidence_refs,
         )
     if relations != {"TARGET_MATCH"}:
         return _unattributed(
             "attribution_unproven",
             support_source=support_source,
-            evidence_refs=sorted(set(evidence_refs)),
+            evidence_refs=evidence_refs,
         )
 
     creation = _decimal(
@@ -370,7 +380,7 @@ def _project_fact(
         return _unattributed(
             "support_predates_pod",
             support_source=support_source,
-            evidence_refs=sorted(set(evidence_refs)),
+            evidence_refs=evidence_refs,
         )
 
     return {
@@ -380,9 +390,42 @@ def _project_fact(
     }
 
 
-def _level_eligibility(
+def _effective_population_evidence(
     *,
     population_evidence: dict[str, dict[str, Any]],
+    facts: list[dict[str, Any]],
+    projected_facts: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    effective = {
+        domain: {
+            "status": evidence["status"],
+            "diagnostics": list(evidence["diagnostics"]),
+        }
+        for domain, evidence in population_evidence.items()
+    }
+
+    for fact in facts:
+        domain = fact["evidence_family"]
+        if domain not in effective:
+            continue
+        projected = projected_facts[fact["fact_id"]]
+        if projected["status"] != "UNATTRIBUTED":
+            continue
+        classification = projected["class"]
+        if classification == "foreign_workload":
+            continue
+
+        effective[domain]["status"] = "INCOMPLETE"
+        diagnostic = f"unattributed_fact:{fact['fact_id']}:{classification}"
+        if diagnostic not in effective[domain]["diagnostics"]:
+            effective[domain]["diagnostics"].append(diagnostic)
+
+    return effective
+
+
+def _level_eligibility(
+    *,
+    effective_population_evidence: dict[str, dict[str, Any]],
     level_requirements: dict[str, list[dict[str, str]]],
 ) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
@@ -392,7 +435,7 @@ def _level_eligibility(
             if clause["quantifier"] != "FORALL":
                 continue
             domain = clause["domain"]
-            if population_evidence[domain]["status"] != "COMPLETE":
+            if effective_population_evidence[domain]["status"] != "COMPLETE":
                 reason = f"population_incomplete:{domain}"
                 if reason not in blocked_by:
                     blocked_by.append(reason)
@@ -422,13 +465,14 @@ def project_attribution_decision(
         population_evidence=normalized_population,
     )
 
-    if domain_status == "UNDETERMINABLE":
-        analysis = {
+    analysis = (
+        {
             "status": "INADMISSIBLE",
             "reason": "target_domain_undeterminable",
         }
-    else:
-        analysis = {"status": "ADMISSIBLE"}
+        if domain_status == "UNDETERMINABLE"
+        else {"status": "ADMISSIBLE"}
+    )
 
     projected_facts = {
         fact["fact_id"]: _project_fact(
@@ -437,13 +481,19 @@ def project_attribution_decision(
         )
         for fact in normalized_facts
     }
+    effective_population = _effective_population_evidence(
+        population_evidence=normalized_population,
+        facts=normalized_facts,
+        projected_facts=projected_facts,
+    )
 
     return {
         "analysis": analysis,
         "facts": projected_facts,
+        "population_evidence": normalized_population,
+        "effective_population_evidence": effective_population,
         "level_eligibility": _level_eligibility(
-            population_evidence=normalized_population,
+            effective_population_evidence=effective_population,
             level_requirements=normalized_requirements,
         ),
-        "population_evidence": normalized_population,
     }
