@@ -1,6 +1,6 @@
 # ATTRIBUTION-DECISION-002 — Emenda de input de criação por UID
 
-> Status: **pré-registração fechada.**
+> Status: **fechado, validado em RED/GREEN.**
 > Branch: `praeva/attribution-decision-002`.
 > Base: `main` em `20b82960166da3a1ea206f78707c1fd5fb64afbd`.
 > Herda ATTRIBUTION-DECISION-001 e altera somente a forma da evidência de criação.
@@ -10,7 +10,7 @@
 
 ## 1. Problema descoberto no desenho do wiring
 
-ATTRIBUTION-DECISION-001 exige hoje um único:
+ATTRIBUTION-DECISION-001 exigia um único:
 
 ```text
 creation_timestamp
@@ -65,7 +65,7 @@ O campo escalar é substituído por evidência de criação indexada por UID:
 
 `creation_timestamp` deixa de fazer parte da interface normativa.
 
-Como não existe wiring de produção ainda, esta mudança pode ser breaking sem camada de compatibilidade.
+Como não existe wiring de produção ainda, esta mudança é breaking sem camada de compatibilidade.
 
 ---
 
@@ -194,8 +194,16 @@ cada item em `facts`.
 | 7 | chave UID vazia | `AttributionDecisionInputError` |
 | 8 | apenas campo legado `creation_timestamp` | `AttributionDecisionInputError` |
 
-Os testes existentes de ATTRIBUTION-DECISION-001 devem ser migrados para o novo shape sem mudar suas
+Os testes existentes de ATTRIBUTION-DECISION-001 foram migrados para o novo shape sem mudar suas
 expectativas semânticas.
+
+### 8.1 Evidência RED/GREEN
+
+- RED: commit `ee3dca35` adicionou os oito testes antes da alteração de `projection.py`;
+- `CI #105`: Ruff passou e Pytest falhou como esperado;
+- GREEN: `projection.py` passou a resolver creation evidence somente após UID único;
+- fixtures anteriores foram migradas para `creation_by_uid`;
+- `CI #108`: Ruff, Pytest e build/push passaram.
 
 ---
 
@@ -222,7 +230,7 @@ Esses itens pertencem aos slices de wiring posteriores.
 - [x] shape `creation_by_uid` congelado
 - [x] ordem de decisão congelada
 - [x] missing creation evidence definido como semântico
-- [ ] testes 1–8 commitados e falhando antes do GREEN
-- [ ] testes existentes migrados sem mudar semântica
-- [ ] suíte completa verde
-- [ ] nenhuma alteração fora de `praeva/attribution` neste slice
+- [x] testes 1–8 commitados e falhando antes do GREEN
+- [x] testes existentes migrados sem mudar semântica
+- [x] suíte completa verde
+- [x] nenhuma alteração fora de `praeva/attribution` neste slice
