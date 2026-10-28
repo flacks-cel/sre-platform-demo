@@ -1,7 +1,7 @@
 # ATTRIBUTION-DECISION-001 — Contrato de Pré-Registração
 ## Projeção de atribuição para superfície de decisão
 
-> Status: **pré-registração fechada, emendada em review antes do merge.**
+> Status: **pré-registração fechada; review conceitual concluído antes do merge.**
 > Branch: `praeva/attribution-decision-001`.
 > Módulo: `praeva/attribution/projection.py`.
 > Base: SPIKE-003 encerrado (PR #22).
@@ -189,11 +189,11 @@ A entrada `population_evidence` representa completude antes da porta de atribui�
 
 A projeção produz também `effective_population_evidence`.
 
-Para cada fato:
+Para cada fato cuja `evidence_family` possui domínio declarado em `population_evidence`:
 
 - `ATTRIBUTED`: não degrada o domínio;
 - `UNATTRIBUTED(foreign_workload)`: não degrada o domínio alvo, pois o fato foi provado estrangeiro;
-- qualquer outro `UNATTRIBUTED`: o domínio `evidence_family` passa a `INCOMPLETE`.
+- qualquer outro `UNATTRIBUTED`: o domínio passa a `INCOMPLETE`.
 
 A degradação adiciona diagnóstico auditável:
 
@@ -206,10 +206,15 @@ A entrada original é preservada em `population_evidence`; o gating usa apenas
 
 ### 7.3 Relação entre `evidence_family` e domínio
 
-Nesta versão, `facts[].evidence_family` deve nomear uma chave existente em `population_evidence`.
+Todo domínio referenciado por `level_requirements` deve existir em `population_evidence`; referência a
+domínio ausente é input inválido.
 
-Isso permite que a própria camada conecte atribuição de fato à completude efetiva sem conhecer
-CHANGE-RISK-001 nem qualquer hazard.
+Uma família auxiliar pode aparecer em `facts` sem possuir domínio populacional próprio. Nesse caso o
+fato ainda recebe `ATTRIBUTED/UNATTRIBUTED`, mas não participa de gating de nível.
+
+Se uma regra futura quiser quantificar sobre essa família, ela deve primeiro declará-la em
+`population_evidence`. Isso mantém famílias auxiliares desacopladas sem permitir universal sobre
+conjunto sem contrato de completude.
 
 ---
 
@@ -375,12 +380,14 @@ Regressões adicionadas após review, antes da correção GREEN:
 
 - [x] pré-registração anterior à implementação inicial
 - [x] RED inicial anterior a `projection.py`
+- [x] testes do slice incluídos em `pyproject.toml` e efetivamente descobertos pelo CI
 - [x] review conceitual executado antes do merge
 - [x] emenda de completude efetiva registrada antes da correção GREEN
-- [ ] regressões 17–20 commitadas e falhando antes da correção
-- [ ] nenhum nome de regra/hazard concreto no código
-- [ ] `coverage_complete` nunca usado como raw-sample support
-- [ ] membership instantânea em `O(T)` nunca usada como critério de atribuição
-- [ ] `foreign_workload` não degrada população alvo
-- [ ] fato alvo não atribuível degrada o domínio efetivo correspondente
-- [ ] nenhuma alteração em Analyze, Join, Verify ou Risk
+- [x] regressões 17–20 commitadas e falhando antes da correção (`CI #101`: 4 failed, 235 passed)
+- [x] GREEN posterior às regressões (`CI #102`: suíte + build verdes)
+- [x] nenhum nome de regra/hazard concreto no código
+- [x] `coverage_complete` nunca usado como raw-sample support
+- [x] membership instantânea em `O(T)` nunca usada como critério de atribuição
+- [x] `foreign_workload` não degrada população alvo
+- [x] fato alvo não atribuível degrada o domínio efetivo correspondente
+- [x] nenhuma alteração em Analyze, Join, Verify ou Risk
