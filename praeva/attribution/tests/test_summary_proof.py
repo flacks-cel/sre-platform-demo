@@ -113,6 +113,17 @@ def _fixture(
         "cpu_long",
         points=len(cpu_long_points),
     )
+    if ratio_summary is None:
+        if cpu_short_points == limit_points:
+            ratio_summary = _ratio_summary()
+        else:
+            ratio_summary = {
+                "status": "UNKNOWN",
+                "window": "2m",
+                "reason_code": "timestamp_misalignment",
+                "reason": "CPU and historical limit timestamps are not exactly aligned",
+            }
+
     verify_report = {
         "status": "VALID",
         "windows": {"short": "2m", "long": "5m"},
@@ -130,7 +141,7 @@ def _fixture(
                     "short": short_summary,
                     "long": long_summary,
                 },
-                "cpu_limit_ratio": ratio_summary or _ratio_summary(),
+                "cpu_limit_ratio": ratio_summary,
                 "cfs_throttling": {
                     "short": cfs_short_summary
                     or _cfs_summary(
