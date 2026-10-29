@@ -101,15 +101,18 @@ def _fixture(
     ):
         facts.extend(_fact(pod, family, timestamp) for timestamp in timestamps)
 
-    projection = {
-        "facts": {
-            fact["fact_id"]: _decision()
-            for fact in facts
-        }
-    }
+    projection = {"facts": {fact["fact_id"]: _decision() for fact in facts}}
     if decisions:
         projection["facts"].update(decisions)
 
+    short_summary = cpu_short_summary or _cpu_summary(
+        "cpu_short",
+        points=len(cpu_short_points),
+    )
+    long_summary = cpu_long_summary or _cpu_summary(
+        "cpu_long",
+        points=len(cpu_long_points),
+    )
     verify_report = {
         "status": "VALID",
         "windows": {"short": "2m", "long": "5m"},
@@ -124,8 +127,8 @@ def _fixture(
         "pods": {
             pod: {
                 "cpu_usage": {
-                    "short": cpu_short_summary or _cpu_summary("cpu_short", points=len(cpu_short_points)),
-                    "long": cpu_long_summary or _cpu_summary("cpu_long", points=len(cpu_long_points)),
+                    "short": short_summary,
+                    "long": long_summary,
                 },
                 "cpu_limit_ratio": ratio_summary or _ratio_summary(),
                 "cfs_throttling": {
