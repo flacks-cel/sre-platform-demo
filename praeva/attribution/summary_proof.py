@@ -462,12 +462,10 @@ def _ratio_capability(
     ]
     missing = [fact_id for fact_id in fact_refs if fact_id not in decisions]
     if missing:
-        witness = {
-            "status": "UNUSABLE",
-            "fact_refs": fact_refs,
-            "blocked_by": ["composite_witness_component_missing"],
-        }
-    elif any(decisions[fact_id].get("status") != "ATTRIBUTED" for fact_id in fact_refs):
+        raise AttributionSummaryProofInputError(
+            "cpu_limit_ratio max_timestamp must reference both component facts"
+        )
+    if any(decisions[fact_id].get("status") != "ATTRIBUTED" for fact_id in fact_refs):
         witness = {
             "status": "UNUSABLE",
             "fact_refs": fact_refs,
