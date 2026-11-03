@@ -6,10 +6,6 @@ import json
 
 import pytest
 
-from praeva.ownership.prometheus_adapter import collect_ownership_evidence
-from praeva.verify.cpu_evidence import build_report
-
-
 POD = "jobs-api-abc"
 UID = "uid-a"
 TIMESTAMPS = ["570", "585", "600", "615", "630"]
@@ -23,6 +19,15 @@ TARGET = {
 
 def _module():
     return importlib.import_module("praeva.attribution.compose")
+
+
+def build_report(**kwargs):
+    return importlib.import_module("praeva.verify.cpu_evidence").build_report(**kwargs)
+
+
+def collect_ownership_evidence(**kwargs):
+    module = importlib.import_module("praeva.ownership.prometheus_adapter")
+    return module.collect_ownership_evidence(**kwargs)
 
 
 def _points(family: str, values: list[str]) -> list[dict]:
