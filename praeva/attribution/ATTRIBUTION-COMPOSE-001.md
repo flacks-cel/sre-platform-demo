@@ -75,7 +75,7 @@ Esse return serve para testes e composição **interna**. Não altera `PRAEVA-AN
 
 Antes de chamar o resolver, exigir:
 
-1. `verify_report` pertence ao **mesmo normalized evidence**: `windows.short/long`, `acquisition` (namespace, container, pod_selector, start, end, step) e `queries` são os mesmos, sem perder query provenance. Comparações de timestamps/step são numéricas exatas (Decimal; sem float), não string-frágeis.
+1. `verify_report` pertence ao **mesmo normalized evidence**: `windows.short/long`, `acquisition` (namespace, container, pod_selector, start, end, step) e `queries` são os mesmos, sem perder query provenance. Comparações de timestamps/step são numéricas exatas (Decimal; sem float), não string-frágeis. **Emenda de review antes do RED correspondente:** também validar, por recomputação determinística do Verify core, `pods`, `selectors`, `status` e `unknown_reasons`. Comparar só metadados permitiria substituir `max_timestamp` por outro ponto existente, alterando o witness silenciosamente. A recomputação é validação interna, não uma segunda fonte de verdade e não publica outra camada.
 2. `ownership_evidence.acquisition` corresponde **exatamente** ao `fact_input.ownership_acquisition`: namespace, start, end e step. Não aceitar intervalo menor, grade deslocada, outro namespace, nearest neighbor ou preenchimento oportunista.
 3. `target_workload` é validado pelo resolver contra o namespace da evidência. Apenas `apps/Deployment` conforme WORKLOAD-OWNERSHIP-001.
 4. `fact_input.facts` e `attribution.facts` têm IDs 1:1 — validado pelo summary-proof. Fato não atribuível não é removido.
@@ -116,5 +116,6 @@ Essas são dependências reais do wiring futuro; neste slice o chamador deve **f
 9. `UNDETERMINABLE` não vira erro de execução; devolve analysis INADMISSIBLE.
 10. Famílias independentes e ratio composto não aceitam componente ausente.
 11. Não alterar nem importar `praeva.analyze.orchestrator`, Join ou Risk na implementação.
+12. Review: `max_timestamp` de CPU ou `cpu_limit_ratio` adulterado, embora aponte para fato existente e mantenha provenance igual, é incompatibilidade estrutural do Verify e deve falhar antes de qualquer decisão.
 
 **Gate:** registrar testes RED contra módulo inexistente, implementar GREEN e validar CI completo; só depois avaliar PR Ready for review. Merge somente com autorização explícita.
