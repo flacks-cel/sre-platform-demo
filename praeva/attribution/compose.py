@@ -22,8 +22,8 @@ def _mapping(value: Any, *, field: str) -> dict[str, Any]:
 
 
 def _decimal(value: Any, *, field: str) -> Decimal:
-    if isinstance(value, (bool, float)) or not isinstance(
-        value, (str, int, Decimal)
+    if isinstance(value, bool | float) or not isinstance(
+        value, str | int | Decimal
     ):
         raise AttributionComposeInputError(f"{field} must be an exact decimal")
     try:
