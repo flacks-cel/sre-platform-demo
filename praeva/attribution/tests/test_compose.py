@@ -298,3 +298,19 @@ def test_foreign_workload_is_not_silently_recast_as_missing_population():
         result["summary_proof"]["pods"][POD]["cpu_long"]["witness"]["status"]
         == "UNUSABLE"
     )
+
+
+@pytest.mark.parametrize("summary_kind", ["cpu_short", "cpu_limit_ratio"])
+def test_verify_summary_witness_must_match_reduction_of_normalized_points(
+    summary_kind,
+):
+    inputs = _inputs()
+    pod_report = inputs["verify_report"]["pods"][POD]
+    if summary_kind == "cpu_short":
+        pod_report["cpu_usage"]["short"]["max_timestamp"] = "615"
+    else:
+        pod_report["cpu_limit_ratio"]["max_timestamp"] = "615"
+    # Both altered timestamps are real observed facts; provenance still matches.
+    # Merely checking existence of fact refs is insufficient to detect tampering.
+    with pytest.raises(_module().AttributionComposeInputError):
+        _module().compose_attribution(**inputs)
