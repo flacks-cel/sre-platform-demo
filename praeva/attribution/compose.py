@@ -7,6 +7,7 @@ from praeva.attribution.fact_input import build_attribution_fact_inputs
 from praeva.attribution.projection import project_attribution_decision
 from praeva.attribution.summary_proof import project_summary_proof
 from praeva.ownership.historical import build_ownership_report
+from praeva.verify.cpu_evidence import build_report
 
 COMPOSE_ID = "ATTRIBUTION-COMPOSE-001"
 
@@ -89,6 +90,21 @@ def _check_verify_source(
         raise AttributionComposeInputError(
             "verify_report.queries differs from normalized evidence"
         )
+
+    # Provenance alone cannot authenticate a witness: re-derive Verify's
+    # point reductions so a different (but existing) argmax is not accepted.
+    expected_report = build_report(
+        pods=normalized["pods"],
+        short_window=normalized["short_window"],
+        long_window=normalized["long_window"],
+        acquisition=normalized_acq,
+        queries=normalized_queries,
+    )
+    for key in ("status", "pods", "selectors", "unknown_reasons"):
+        if verify.get(key) != expected_report[key]:
+            raise AttributionComposeInputError(
+                f"verify_report.{key} differs from normalized evidence reduction"
+            )
 
 
 def _check_ownership_acquisition(
