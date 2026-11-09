@@ -16,5 +16,9 @@ testpaths = [
     "praeva/analyze/tests",
     "praeva/ownership/tests",
     "praeva/attribution/tests",
+    # S9 is promoted to a mandatory regression by
+    # CHANGE-RISK-001-POPULATION-GATE-001. Only this file: the rest of
+    # experiments/ stays experimental and non-blocking.
+    "experiments/praeva/spike-003/tests/test_risk_population.py",
 ]
 pythonpath = [".", "app/api"]

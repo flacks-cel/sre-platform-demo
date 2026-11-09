@@ -447,9 +447,33 @@ def test_28_legacy_replay_is_retained_and_new_wire_is_semantically_equivalent() 
     assert "invocation" not in old_wire
     assert new_wire["schema_version"] == "PRAEVA-ANALYZE-002"
     assert "invocation" in new_wire
-    projected = dict(new_wire)
+    projected = json.loads(json.dumps(new_wire))
     projected.pop("invocation")
     projected["schema_version"] = "PRAEVA-ANALYZE-001"
+
+    # CHANGE-RISK-001-POPULATION-GATE-001 is a deliberate, pre-registered
+    # semantic change that lands after the v1 golden was frozen, so the two
+    # wires are no longer identical outside invocation and schema_version.
+    # This guard stays strict: the ONE allowed delta is named and removed
+    # here, and anything else that drifts still fails the assertion.
+    gate = {
+        "code": "population_completeness_unproven",
+        "precondition": "proven_complete_target_population",
+    }
+
+    def _drop_gate(node: object) -> None:
+        if isinstance(node, dict):
+            reasons = node.get("unknown_reasons")
+            if isinstance(reasons, list) and gate in reasons:
+                node["unknown_reasons"] = [r for r in reasons if r != gate]
+            for value in node.values():
+                _drop_gate(value)
+        elif isinstance(node, list):
+            for value in node:
+                _drop_gate(value)
+
+    assert gate in new_wire["result"]["unknown_reasons"]
+    _drop_gate(projected)
     assert projected == old_wire
 
 

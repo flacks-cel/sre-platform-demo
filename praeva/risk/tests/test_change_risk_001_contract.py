@@ -118,14 +118,28 @@ def _joined(
     current: int | str = 500,
     direction: str = "DECREASE",
     pods: dict | None = None,
+    population_completeness: str | None = "PROVEN_COMPLETE",
 ) -> dict:
+    """Build a joined document.
+
+    CHANGE-RISK-001-POPULATION-GATE-001 §6: the ladder tests keep asserting
+    HIGH, MEDIUM and LOW, so this helper supplies the population proof the
+    gate requires instead of those tests changing their expectations. Gate
+    tests pass population_completeness explicitly to withhold it.
+    """
+
     if pods is None:
         pods = {"pod-a": _pod()}
+    identity: dict = {
+        "status": "CALLER_ASSERTED",
+        "workload_to_pod_selector_relation": "UNVERIFIED",
+    }
+    if population_completeness is not None:
+        identity["population_completeness"] = population_completeness
     return {
         "join_id": "CHANGE-JOIN-001",
         "identity_assertion": {
-            "status": "CALLER_ASSERTED",
-            "workload_to_pod_selector_relation": "UNVERIFIED",
+            **identity,
             "change_workload": {
                 "group": "apps",
                 "kind": "Deployment",
