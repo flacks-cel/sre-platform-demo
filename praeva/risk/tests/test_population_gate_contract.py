@@ -213,3 +213,45 @@ def test_14_s9_complete_population_is_critical() -> None:
 
     assert result["classification_status"] == "CLASSIFIED"
     assert result["risk_level"] == "CRITICAL"
+
+
+# ---------------------------------------------------------------------------
+# 15-17: the gate removes a classification, it does not strip the result.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "proposed",
+    [PROPOSED_HIGH, PROPOSED_MEDIUM, PROPOSED_LOW],
+)
+def test_15_gated_result_preserves_policy_evidence_and_provenance(proposed: int) -> None:
+    classified = _evaluate(proposed=proposed)
+    gated = _evaluate(proposed=proposed, population_completeness=None)
+
+    assert gated["policy"] == classified["policy"]
+    assert gated["evidence_refs"] == classified["evidence_refs"]
+    assert gated["provenance"] == classified["provenance"]
+    assert gated["rule_id"] == classified["rule_id"]
+    assert gated["hazard_id"] == classified["hazard_id"]
+    assert gated["applicability"] == classified["applicability"]
+
+
+def test_16_gated_result_drops_only_the_classification_fields() -> None:
+    classified = _evaluate(proposed=PROPOSED_LOW)
+    gated = _evaluate(proposed=PROPOSED_LOW, population_completeness=None)
+
+    removed = set(classified) - set(gated)
+    added = set(gated) - set(classified)
+
+    assert removed == {"risk_level", "classification_basis"}
+    assert added == {"unknown_reasons"}
+
+
+def test_17_gate_is_idempotent_and_never_duplicates_its_reason() -> None:
+    from praeva.risk.cpu_limit_insufficiency import _apply_population_gate
+
+    once = _evaluate(proposed=PROPOSED_LOW, population_completeness=None)
+    twice = _apply_population_gate(once, proven=False)
+
+    assert twice == once
+    assert _reason_codes(twice).count(GATE_CODE) == 1

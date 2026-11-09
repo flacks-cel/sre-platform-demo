@@ -475,21 +475,20 @@ def _apply_population_gate(result: dict[str, Any], *, proven: bool) -> dict[str,
     if result.get("risk_level") not in _UNIVERSAL_RUNGS:
         return result
 
-    gated = {
-        "rule_id": result["rule_id"],
-        "hazard_id": result["hazard_id"],
-        "applicability": result["applicability"],
-        "classification_status": "UNKNOWN",
-        "unknown_reasons": [
-            {
-                "code": POPULATION_GATE_CODE,
-                "precondition": POPULATION_GATE_PRECONDITION,
-            }
-        ],
-        "provenance": result["provenance"],
-    }
-    if result.get("evidence_refs"):
-        gated["evidence_refs"] = result["evidence_refs"]
+    # Preserve by subtraction, not by enumeration: everything the ladder
+    # produced stays except the two fields a non-classification cannot carry.
+    # evidence_refs, policy and provenance survive, and so would any field a
+    # later slice adds, instead of being silently dropped here.
+    gated = dict(result)
+    gated.pop("risk_level", None)
+    gated.pop("classification_basis", None)
+    gated["classification_status"] = "UNKNOWN"
+    gated["unknown_reasons"] = [
+        {
+            "code": POPULATION_GATE_CODE,
+            "precondition": POPULATION_GATE_PRECONDITION,
+        }
+    ]
     validate_risk_result(gated)
     return gated
 
