@@ -174,24 +174,32 @@ indecidível produz `UNPROVEN`, nunca prova.
 
 ---
 
-## 8. Plano de teste — completar e congelar antes de RED
-
-Esboço, a completar quando a policy estiver fechada:
+## 8. Plano de teste — fechado após a decisão B
 
 | # | Cenário | Esperado |
 |---|---|---|
-| 1 | `V(T) = O(T)` em todos os avaliados, evidência completa | `PROVEN_COMPLETE` |
-| 2 | Um pod do alvo não observado | `UNPROVEN(population_omission)`, nomeando o pod |
-| 3 | Um pod observado que o alvo não possui | `UNPROVEN(population_foreign_pod)` |
-| 4 | Enumeração `UNKNOWN` em um timestamp avaliado | `UNPROVEN(population_enumeration_unknown)` |
-| 5 | Membro de `O(T)` sem série de uma família exigida | `UNPROVEN(population_evidence_missing)` |
-| 6 | Lacuna fora de **todos** os domínios universais e suportes necessários (opção B) | `PROVEN_COMPLETE`; lacuna em ponto da grade universal ou dentro de suporte requerido segue `UNPROVEN` |
-| 7 | `required_families` vazio | erro de input — uma prova sobre nada não é prova |
-| 8 | Entrada com `identity_assertion` | ignorada ou erro; nunca aceita como evidência |
+| 1 | `V(T) = O(T)` em toda a grade, domínios `COMPLETE` | `PROVEN_COMPLETE` |
+| 2 | Pod do alvo nunca observado | `UNPROVEN(population_omission)`, nomeando o pod |
+| 3 | Pod observado que o alvo não possui | `UNPROVEN(population_foreign_pod)` |
+| 4 | Enumeração `UNKNOWN` em timestamp exigido | `UNPROVEN(population_enumeration_unknown)` |
+| 5 | Membro de `O(T)` sem série de família exigida | `UNPROVEN(population_evidence_missing)` |
+| 6 | Lacuna **fora** de todo domínio e suporte exigidos | `PROVEN_COMPLETE` — §5.3 |
+| 7 | `universal_requirements` vazio | erro de input |
+| 8 | `identity_assertion` ou `population_completeness` na entrada | nunca aceito como prova |
 | 9 | Mesma entrada, duas execuções | saída idêntica |
-| 10 | Captura real do rollout de 05/11 | a definir conforme a policy escolhida |
+| 10 | Captura real do rollout de 05/11 | procedimento de laboratório |
 
-O caso 6 distingue B de A: a lacuna precisa estar fora de **todos** os domínios e suportes exigidos, não apenas fora do timestamp do máximo. Acrescentar RED que falhe para: omissão em ponto não-max da grade universal; suporte histórico de rate incompleto apesar de O(T)=V(T); prova escalar estreitada apenas ao degrau HIGH.
+### 8.1 Regressões exigidas pela decisão
+
+| # | Cenário | Esperado | Por quê |
+|---|---|---|---|
+| 11 | Lacuna em ponto **não-máximo** da série | `UNPROVEN(population_evidence_missing)` | §5.2: limitar a verificação ao `max_timestamp` converteria perda de série em falsa completude |
+| 12 | Fato com suporte histórico `[T−W,T]` incompleto, `O(T) = V(T)` | `UNPROVEN(population_evidence_missing)` | §5.2: igualdade de conjuntos não mascara falha de suporte ou de continuidade de UID |
+| 13 | Declaração só com os requisitos de `HIGH` | **erro de input** | §5.1: prova escalar exige a união de `HIGH`, `MEDIUM` e `LOW`; não se calcula prova restrita e se reutiliza |
+| 14 | Declaração com rung desconhecido | erro de input | o escopo é declarativo e versionado, não extensível em runtime |
+| 15 | `cpu_limit`, de domínio `NOT_APPLICABLE`, ausente da declaração | não exigido universalmente | §5.2: não inventar quantificador para família auxiliar |
+
+Os casos 11, 12 e 13 são os que distinguem esta implementação de uma leitura frouxa da opção B.
 
 ---
 
