@@ -423,3 +423,44 @@ def test_26_programmatic_analyze_has_same_canonical_document_shape() -> None:
     for key in ("start", "end", "step", "current_manifest_sha256"):
         assert key in result["invocation"]
     assert "config_path" not in result["invocation"]
+
+
+# §6.2 schema migration cases, added before GREEN.
+
+
+def test_27_added_invocation_bumps_canonical_schema() -> None:
+    result = _analyze()(**_analyze_kwargs())
+    assert result["schema_version"] == "PRAEVA-ANALYZE-002"
+
+
+def test_28_legacy_replay_is_retained_and_new_wire_is_semantically_equivalent() -> None:
+    base = (
+        Path(__file__).parent
+        / "fixtures"
+        / "replay"
+        / "jobs-api-live-001"
+    )
+    old_path = base / "expected.v1.json"
+    old_wire = json.loads(old_path.read_text(encoding="utf-8"))
+    new_wire = json.loads((base / "expected.json").read_text(encoding="utf-8"))
+    assert old_wire["schema_version"] == "PRAEVA-ANALYZE-001"
+    assert "invocation" not in old_wire
+    assert new_wire["schema_version"] == "PRAEVA-ANALYZE-002"
+    assert "invocation" in new_wire
+    projected = dict(new_wire)
+    projected.pop("invocation")
+    projected["schema_version"] = "PRAEVA-ANALYZE-001"
+    assert projected == old_wire
+
+
+def test_29_legacy_container_space_default_has_auditable_origin(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    current, proposed = _manifests(tmp_path)
+    code, output, error = _cli(_args(current, proposed), capsys)
+    assert code == 0, error
+    invocation = json.loads(output)["invocation"]
+    container_space = invocation["effective_params"]["container_space"]
+    assert container_space["value"] == "containers"
+    assert container_space["origin"] == "LEGACY_DEFAULT"
