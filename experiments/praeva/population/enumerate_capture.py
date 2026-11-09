@@ -41,8 +41,17 @@ from praeva.ownership.prometheus_adapter import (  # noqa: E402
 
 
 def _payloads(capture_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Find the two owner payloads by their labels.
+
+    Not by filename, and not by the PromQL text: a raw capture is often just
+    the Prometheus response, with the query it came from recorded elsewhere
+    or nowhere. Only the owner series carry owner_kind, which makes the
+    labels a reliable discriminator on their own.
+    """
+
     pod_payload: dict[str, Any] | None = None
     replicaset_payload: dict[str, Any] | None = None
+    scanned: list[tuple[str, list[str]]] = []
 
     for path in sorted(capture_dir.rglob("*.json")):
         try:
@@ -58,25 +67,34 @@ def _payloads(capture_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         result = payload.get("data", {}).get("result")
         if not isinstance(result, list) or not result:
             continue
-
-        labels = result[0].get("metric", {})
+        labels = result[0].get("metric")
         if not isinstance(labels, dict):
             continue
-        text = json.dumps(document)
-        if "replicaset" in labels and "kube_replicaset_owner" in text:
+
+        name = str(path.relative_to(capture_dir))
+        scanned.append((name, sorted(labels)))
+
+        if "owner_kind" not in labels:
+            continue
+        if "replicaset" in labels and replicaset_payload is None:
             replicaset_payload = payload
-            print(f"  replicaset_owner <- {path.relative_to(capture_dir)}")
-        elif "pod" in labels and "uid" in labels and "kube_pod_owner" in text:
+            print(f"  replicaset_owner <- {name}")
+        elif "pod" in labels and "uid" in labels and pod_payload is None:
             pod_payload = payload
-            print(f"  pod_owner        <- {path.relative_to(capture_dir)}")
+            print(f"  pod_owner        <- {name}")
 
     if pod_payload is None or replicaset_payload is None:
         missing = []
         if pod_payload is None:
-            missing.append("kube_pod_owner")
+            missing.append("kube_pod_owner (labels pod, uid, owner_kind)")
         if replicaset_payload is None:
-            missing.append("kube_replicaset_owner")
-        raise SystemExit(f"capture is missing: {', '.join(missing)}")
+            missing.append("kube_replicaset_owner (labels replicaset, owner_kind)")
+        print("\ncapture is missing: " + "; ".join(missing))
+        print("files scanned and the labels found in each:")
+        for name, labels in scanned:
+            print(f"  {name}: {', '.join(labels) or '(no labels)'}")
+        raise SystemExit(1)
+
     return pod_payload, replicaset_payload
 
 
