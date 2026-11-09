@@ -196,6 +196,20 @@ dos dois vira o outro. O 18 valida contra telemetria real já capturada.
 
 ---
 
+## 8.1 Cenário 18 — validado contra telemetria real (2026-11-09)
+
+Executado por Flavio contra a captura do rollout de 05/11
+(`.runtime/praeva-rollout-20261105-185041-1794227910`), via
+`experiments/praeva/population/enumerate_capture.py`.
+
+**Resultado: `ENUMERATED` em todos os timestamps da grade, zero `UNKNOWN`.**
+
+Nenhuma lacuna de série de ownership na janela, portanto nenhum conjunto vazio produzido por
+ausência de amostra — o modo de falha que a seção 4 existe para impedir não ocorreu nos dados reais.
+A enumeração opera sobre a telemetria do laboratório, não apenas sobre fixtures.
+
+---
+
 ## 9. Checklist do gate
 
 - [ ] Pré-registração commitada, sozinha
