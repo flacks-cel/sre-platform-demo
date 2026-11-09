@@ -227,6 +227,44 @@ A CLI chama `resolve_invocation` e passa o resultado a `analyze()`. O orquestrad
 
 ---
 
+## 6.2 Evolução explícita de schema e replay legado
+
+A adição de `invocation` ao documento canônico é alteração de wire format. Para o
+documento novo, `schema_version = PRAEVA-ANALYZE-002`; esse identificador é a versão
+do schema composto, **não** a renomeação deste slice de implementação
+(`ANALYZE-ERGONOMICS-001`). `PRAEVA-ANALYZE-001` continua sendo a versão histórica.
+
+O replay histórico congelado de `jobs-api-live-001` não pode perder sua
+referência original:
+
+- Antes de regenerar, copiar o `expected.json` atual, sem modificar sequer um
+  byte, para `expected.v1.json` dentro da mesma fixture. O novo `expected.json`
+  representa o schema `PRAEVA-ANALYZE-002`.
+- Regenerar o novo golden deterministicamente usando **as mesmas respostas brutas
+  do Prometheus**, os mesmos manifests e os mesmos parâmetros absolutos. Não
+  executar novas consultas live para substituir a fixture.
+- Registrar no gate do replay a migração de schema, a identidade do golden legado,
+  a identidade do novo golden e a explicação de por que a identidade antiga do
+  documento não corresponde mais ao novo wire.
+- Manter o SHA-256 histórico
+  `e767c6e2c4c6f99f23acff2d82e87f5ed777af83bff1249d7980896b2b5e7cf4`
+  como evidência da primeira saída canônica observada. Ele **não** é substituído
+  pelo SHA-256 da saída nova, e não se deve assumir que o hash de `expected.v1.json`
+  incluindo seu possível newline final seja idêntico ao hash do wire original.
+- Testar tanto a igualdade byte a byte de duas execuções no **novo** golden quanto
+  a igualdade semântica do novo documento projetado sem `invocation` e com
+  `schema_version` histórico contra o golden v1. Em caso de divergência além
+  desses campos contratados, barrar GREEN e investigar: não atualizar o golden
+  para esconder mudança de veredito.
+
+O `container_space=containers` pré-existente na CLI permanece somente para
+retrocompatibilidade neste slice. Se nenhum `--container-space` ou `--config`
+fornecer o campo, sua origem em `effective_params` deve ser marcada como
+`LEGACY_DEFAULT`, **não** como entrada `CLI`. Configuração explícita sobrepõe
+esse default pré-existente; a CLI explicitamente informada sobrepõe a configuração.
+
+---
+
 ## 7. Fora de escopo
 
 Entrada vinda do Git · descoberta automática de workload · segundo hazard · qualquer alteração na
@@ -246,6 +284,8 @@ attribution · gate do S9 · saída colorida ou interativa.
 | 5 | Precedência | Por chave: CLI > perfil > raiz; sobrescrever uma não descarta as demais |
 | 6 | Quem emite `invocation` | O orquestrador; a CLI só resolve |
 | 7 | Invariante da §2.1 | Reconstituição da **invocação**, não reprodução do **resultado** |
+| 8 | Formato canônico com `invocation` | Bump para `PRAEVA-ANALYZE-002`; preservar golden v1 e verificar equivalência semântica |
+| 9 | `container_space` implícito legado | Preservar para retrocompatibilidade, origem `LEGACY_DEFAULT` auditável; config explícita vence |
 
 ---
 
@@ -303,6 +343,9 @@ attribution · gate do S9 · saída colorida ou interativa.
 | 24 | Execução com `--config` | `config_path` e `config_sha256` registrados |
 | 25 | Qualquer execução | SHA-256 dos dois manifestos registrado |
 | 26 | `analyze()` chamado programaticamente, sem CLI | mesma forma de documento; `invocation` presente, campos de arquivo ausentes |
+| 27 | Novo documento canônico | `schema_version=PRAEVA-ANALYZE-002` |
+| 28 | Replay congelado migrado | golden v1 preservado byte a byte; novo golden byte-idêntico em duas execuções; remoção de `invocation` + restauração do schema v1 equivale semanticamente ao golden v1 |
+| 29 | `container_space` ausente de CLI/config | valor legado `containers`, origem `LEGACY_DEFAULT`; config explícita vence |
 
 Os casos 5 e 15 são os que distinguem este contrato de uma ergonomia ingênua: tempo relativo não
 pode produzir fronteira fora da grade, e conveniência não pode virar entrada invisível. O 26 é o que
@@ -321,3 +364,5 @@ impede dois documentos canônicos.
 - [ ] Nenhum parâmetro que afete o veredito lido de arquivo sem `--profile` explícito
 - [ ] Chave desconhecida nunca ignorada
 - [ ] Testes do plano 9 escritos e **falhando** antes da primeira linha de implementação
+- [ ] Migração de schema + golden histórico protegidos e documentados antes de declarar GREEN
+- [ ] CI completo na branch do PR #28; resultado GREEN local de outro clone não substitui CI
