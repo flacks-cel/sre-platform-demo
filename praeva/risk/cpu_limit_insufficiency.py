@@ -435,6 +435,35 @@ POPULATION_GATE_PRECONDITION = "proven_complete_target_population"
 # a CRITICAL behind it. That is SPIKE-003 scenario S9.
 _UNIVERSAL_RUNGS = frozenset({"HIGH", "MEDIUM", "LOW"})
 
+# POPULATION-COMPLETENESS-001 §5.1: the scope of a completeness proof comes
+# from here -- a declarative, versioned statement of what each non-CRITICAL
+# rung quantifies over -- and never from evidence_refs, risk_level,
+# classification_basis or the trajectory a particular evaluation happened to
+# take. CRITICAL is absent because it is existential.
+#
+# HIGH needs the long windows free of contradiction everywhere; its short
+# witness is existential. MEDIUM and LOW additionally need no contradiction
+# in the short windows and proof that no window was censored.
+#
+# cpu_limit is deliberately absent: its summary has domain NOT_APPLICABLE,
+# and inventing a universal quantifier for an auxiliary witness family would
+# demand more than the rule actually claims.
+UNIVERSAL_POPULATION_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "HIGH": ("cpu_long",),
+    "MEDIUM": (
+        "cpu_short",
+        "cpu_long",
+        "cfs_throttled_short",
+        "cfs_throttled_long",
+    ),
+    "LOW": (
+        "cpu_short",
+        "cpu_long",
+        "cfs_throttled_short",
+        "cfs_throttled_long",
+    ),
+}
+
 
 def _population_is_proven_complete(joined: dict[str, Any]) -> bool:
     """Fail closed: only the exact positive value counts as proof.
