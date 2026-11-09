@@ -234,8 +234,8 @@ def _throttling_fact(
     return "VALID", any_positive, coverage_complete, ref
 
 
-def evaluate_cpu_limit_insufficiency(*, joined: dict, margin: dict) -> dict:
-    """Classify proposed CPU-limit insufficiency from CHANGE-JOIN-001 facts."""
+def _evaluate_ladder(*, joined: dict, margin: dict) -> dict:
+    """Run the CHANGE-RISK-001 ladder. Thresholds and order are unchanged."""
 
     numerator, denominator, margin_policy = _validate_margin(margin)
     joined_map = _require_mapping(joined, field="joined")
@@ -417,4 +417,93 @@ def evaluate_cpu_limit_insufficiency(*, joined: dict, margin: dict) -> dict:
         margin=margin_policy,
         provenance=provenance,
         evidence_refs=evidence_refs,
+    )
+
+
+# ---------------------------------------------------------------------------
+# CHANGE-RISK-001-POPULATION-GATE-001
+# ---------------------------------------------------------------------------
+
+POPULATION_PROVEN_COMPLETE = "PROVEN_COMPLETE"
+POPULATION_GATE_CODE = "population_completeness_unproven"
+POPULATION_GATE_PRECONDITION = "proven_complete_target_population"
+
+# Rungs whose logical form contains a universal quantifier. CRITICAL is
+# existential: one valid long witness sustains it, and pods that were never
+# observed could only make the contradiction worse. HIGH carries a universal
+# component ("no long contradiction anywhere"), so an unobserved pod can hide
+# a CRITICAL behind it. That is SPIKE-003 scenario S9.
+_UNIVERSAL_RUNGS = frozenset({"HIGH", "MEDIUM", "LOW"})
+
+
+def _population_is_proven_complete(joined: dict[str, Any]) -> bool:
+    """Fail closed: only the exact positive value counts as proof.
+
+    Absent, null, an unknown string or any other type means unproven. This is
+    ADR-005 applied to population: missing evidence never becomes a licence to
+    classify. Deliberately NOT read from workload_to_pod_selector_relation,
+    which would prove membership, never completeness.
+    """
+
+    identity = joined.get("identity_assertion")
+    if not isinstance(identity, dict):
+        return False
+    return identity.get("population_completeness") == POPULATION_PROVEN_COMPLETE
+
+
+def _apply_population_gate(result: dict[str, Any], *, proven: bool) -> dict[str, Any]:
+    """Post-process a single ladder result. Pure: no input validation here."""
+
+    if proven or result.get("applicability") == "NOT_APPLICABLE":
+        return result
+
+    if result.get("classification_status") == "UNKNOWN":
+        reasons = result.get("unknown_reasons", [])
+        if any(entry.get("code") == POPULATION_GATE_CODE for entry in reasons):
+            return result
+        gated = dict(result)
+        gated["unknown_reasons"] = [
+            *reasons,
+            {
+                "code": POPULATION_GATE_CODE,
+                "precondition": POPULATION_GATE_PRECONDITION,
+            },
+        ]
+        validate_risk_result(gated)
+        return gated
+
+    if result.get("risk_level") not in _UNIVERSAL_RUNGS:
+        return result
+
+    gated = {
+        "rule_id": result["rule_id"],
+        "hazard_id": result["hazard_id"],
+        "applicability": result["applicability"],
+        "classification_status": "UNKNOWN",
+        "unknown_reasons": [
+            {
+                "code": POPULATION_GATE_CODE,
+                "precondition": POPULATION_GATE_PRECONDITION,
+            }
+        ],
+        "provenance": result["provenance"],
+    }
+    if result.get("evidence_refs"):
+        gated["evidence_refs"] = result["evidence_refs"]
+    validate_risk_result(gated)
+    return gated
+
+
+def evaluate_cpu_limit_insufficiency(*, joined: dict, margin: dict) -> dict:
+    """Classify proposed CPU-limit insufficiency from CHANGE-JOIN-001 facts.
+
+    The ladder decides the candidate rung; the population gate then blocks the
+    rungs that require a complete population when no proof of completeness is
+    present. The ladder itself is untouched by this gate.
+    """
+
+    result = _evaluate_ladder(joined=joined, margin=margin)
+    return _apply_population_gate(
+        result,
+        proven=_population_is_proven_complete(joined),
     )
