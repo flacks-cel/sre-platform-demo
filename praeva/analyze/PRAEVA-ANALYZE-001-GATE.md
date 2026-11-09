@@ -100,3 +100,31 @@ Após adicionar o teste permanente da captura real:
 - [x] GREEN final local com `194 passed`.
 
 O CI remoto é um gate do PR, não um campo auto-referente deste arquivo: seu resultado final deve ser verificado no head do pull request antes de mergear.
+
+## Nota histórica — migração do wire canônico para PRAEVA-ANALYZE-002 (2026-11-09)
+
+O SHA-256 `e767c6e2c4c6f99f23acff2d82e87f5ed777af83bff1249d7980896b2b5e7cf4`
+acima identifica **a saída canônica v1 observada** durante o primeiro live/replay,
+com `schema_version=PRAEVA-ANALYZE-001`. Ele permanece histórico e **não deve
+ser comparado ao hash do documento emitido pela CLI atual**.
+
+O PR #28 (`ANALYZE-ERGONOMICS-001`, merge `ac5607e`) acrescentou o bloco de
+topo `invocation`, com parâmetros efetivos e proveniência, e alterou
+`schema_version` para `PRAEVA-ANALYZE-002`. Por isso o documento JSON atual
+possui bytes diferentes, **sem que esta migração altere a semântica das quatro
+camadas ou o veredito**. A mudança de formato foi pré-registrada na seção 6.2
+`praeva/analyze/ANALYZE-ERGONOMICS-001.md`.
+
+O golden v1 foi preservado integralmente em
+`praeva/analyze/tests/fixtures/replay/jobs-api-live-001/expected.v1.json`.
+O novo golden, em `expected.json`, representa o schema v2. Os JSONs brutos do
+Prometheus foram mantidos, e os testes da migração verificam a equivalência
+semântica entre as versões ao projetar fora `invocation` e restaurar o
+`schema_version` antigo. O teste de replay do schema v2 continua exigindo
+identidade byte a byte entre execuções determinísticas.
+
+**Precisão dos hashes:** SHA-256 identifica bytes, não os preserva. O hash
+histórico citado acima refere-se ao wire capturado; não se deve inferir que
+seja igual ao hash do arquivo `expected.v1.json` (que pode conter newline
+final). A validade da evidência bruta e a equivalência do resultado são
+questões diferentes da identidade de bytes dos documentos de schema distinto.
