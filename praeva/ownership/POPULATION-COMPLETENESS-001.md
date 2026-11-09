@@ -1,7 +1,7 @@
 # POPULATION-COMPLETENESS-001 — Contrato de Pré-Registração
 ## Composição da prova de completude populacional
 
-> Status: **pré-registração — aguarda uma decisão de policy (seção 5).**
+> Status: **seção 5 fechada (opção B) antes de RED; plano de testes a completar.**
 > Base: `main @ d9114fb`. Destino: `praeva/ownership/completeness.py`
 > Compõe POPULATION-ENUMERATION-001, ATTRIBUTION-FACT-INPUT-001 e
 > ATTRIBUTION-SUMMARY-PROOF-001. Função pura, sem consulta e sem rede.
@@ -65,29 +65,78 @@ A comparação com `O(T)` é feita por nome, pela limitação já registrada na 
 
 ---
 
-## 5. Decisão de policy pendente — sobre quais timestamps a completude é exigida
+## 5. Decisão de policy — opção B, fechada antes de RED
 
-Esta é a única questão em aberto, e é critério de admissibilidade: define o que conta como prova.
-**Não implemento antes da sua decisão.**
+**Decisão:** a prova deve cobrir todos os timestamps que sustentam as
+afirmações universais que a regra pode utilizar, e as famílias de evidência
+necessárias a essas afirmações. Não se exige automaticamente todo o
+envelope adquirido se parte dele não sustenta nenhuma dessas afirmações.
 
-| Opção | Exigência | Consequência |
-|---|---|---|
-| **A — grade inteira** | `COMPLETE` em todos os timestamps da aquisição | mais simples de explicar; um único buraco em qualquer canto da janela bloqueia tudo |
-| **B — suporte das afirmações universais** | `COMPLETE` nos timestamps que sustentam os sumários universais que a regra consome | mais preciso; exige que esta camada saiba quais sumários são universais, informação que o `summary_proof` já computa |
-| **C — por família** | completude avaliada e reportada por família de evidência | mais informativo; a regra passaria a receber um mapa, não um valor, o que muda o contrato do portão |
+### 5.1 O escopo não depende do resultado observado
 
-**Minha recomendação é B**, pelo mesmo raciocínio que já usamos duas vezes: a prova deve cobrir o
-suporte do fato, não um envelope arbitrário maior. Exigir a grade inteira faria uma lacuna em
-evidência que nenhuma conclusão usa bloquear uma conclusão legítima — é o oposto de "porta, não
-peso".
+O conjunto exigido vem de **requisitos declarativos, versionados da regra**
+e da grade de avaliação dos resumos Verify, **não** de
+`evidence_refs`, `risk_level`, `classification_basis`, máximos observados
+ou da trajetória contingente de execução do Risk.
 
-Contra B: ela acopla a prova de completude ao caminho de decisão da regra, e foi exatamente a
-objeção que levantei em 19/10 sobre `evidence_refs` deixar de ser trilha de auditoria para virar
-entrada de cálculo. A diferença é que agora o `summary_proof` já faz essa distinção
-explicitamente, então o acoplamento é a um contrato existente, não a uma inferência nova.
+Nesta versão, o portão recebe um único `PROVEN_COMPLETE`, sem carimbo
+de nível. Consequentemente a prova escalar deve cobrir a **união conservadora**
+dos requisitos universais de todas as conclusões não-`CRITICAL` que ela
+poderá destravar (`HIGH`, `MEDIUM`, `LOW`); não pode calcular uma
+prova restrita a `HIGH` e reutilizar o mesmo valor para `LOW`.
 
-C muda o contrato do portão, que hoje lê um valor único. Se for o caminho, o
-CHANGE-RISK-001-POPULATION-GATE-001 precisa de emenda antes.
+Uma futura prova por nível/família exige emenda explícita do contrato do
+portão, não é inferida aqui. É permitido apresentar diagnósticos por
+família internamente, mas o resultado escalar exige a conjunção de
+**todos** os requisitos declarados.
+
+### 5.2 Grade universal e suporte histórico não são a mesma coisa
+
+Para uma família `rate()` exigida universalmente, **todos os pontos de
+avaliação esperados no domínio daquele resumo Verify** contam, inclusive
+os pontos sem fato ou sem série. Nunca limitar a verificação a
+`max_timestamp`, à presença de witnesses ou aos timestamps observados:
+isso converteria perda de série em falsa completude.
+
+A cada avaliação `T` exigida, a enumeração `O(T)` precisa ser resolvida,
+a comparação com `V(T,família)` precisa cobrir todos os membros do alvo,
+e os sumários relevantes precisam de `domain=COMPLETE` e fatos
+atribuíveis/usáveis segundo `ATTRIBUTION-SUMMARY-PROOF-001`.
+`OMISSION`, `FOREIGN`, `UNKNOWN` ou domínio incompleto impedem
+`PROVEN_COMPLETE`. Não confundir `ENUMERATED` sozinho com completude.
+
+A atribuição de cada fato `rate()` em `T` exige, separadamente, o
+suporte histórico conservador `[T-W,T]`, como definido por
+`ATTRIBUTION-FACT-INPUT-001`: nenhuma falha na continuidade de UID,
+janela de suporte, boundary ou ownership pode ser mascarada por
+`O(T)=V(T)`. O domínio da série é a grade de avaliações; o suporte
+é histórico. A prova deve respeitar **ambos**, sem ampliar
+automaticamente a exigência de *enumeração populacional* para
+timestamps históricos não consumidos.
+
+Para famílias auxiliares com `domain=NOT_APPLICABLE`, como o witness
+pontual de `cpu_limit`, **não** inventar um quantificador universal:
+aplicar sua exigência de witness/suporte somente onde a regra o
+consome, conforme contrato do summary proof. Isso não autoriza
+ignorar evidência indispensável nem transformar witness ausente em
+usável.
+
+### 5.3 Consequência operacional e caso distintivo
+
+Na CHANGE-RISK-001 atual, as conclusões não-`CRITICAL` consomem
+domínios universais de CPU e CFS ao longo das respectivas grades
+Verify. **Uma lacuna dentro desses domínios não é descartável
+pela opção B.** Uma lacuna fora de todo domínio e suporte
+realmente exigidos não pode, por si só, bloquear a conclusão.
+
+O caso 6 de testes deverá colocar a lacuna *realmente fora do
+suporte de todas as afirmações universais e fatos necessários*.
+Não basta dizer que é fora do `max_timestamp`: os demais pontos
+da série continuam necessários para uma afirmação universal.
+
+**Não é permitido escolher o conjunto exigido por inspeção do
+resultado do Risk**, nem aceitar seletor, regex, `CALLER_ASSERTED`
+ou o campo já preenchido `population_completeness` como prova.
 
 ---
 
@@ -125,7 +174,7 @@ indecidível produz `UNPROVEN`, nunca prova.
 
 ---
 
-## 8. Plano de teste — a escrever após a decisão da seção 5
+## 8. Plano de teste — completar e congelar antes de RED
 
 Esboço, a completar quando a policy estiver fechada:
 
@@ -136,19 +185,19 @@ Esboço, a completar quando a policy estiver fechada:
 | 3 | Um pod observado que o alvo não possui | `UNPROVEN(population_foreign_pod)` |
 | 4 | Enumeração `UNKNOWN` em um timestamp avaliado | `UNPROVEN(population_enumeration_unknown)` |
 | 5 | Membro de `O(T)` sem série de uma família exigida | `UNPROVEN(population_evidence_missing)` |
-| 6 | Lacuna em timestamp **não** avaliado (só sob B) | `PROVEN_COMPLETE` — prova cobre o suporte, não o envelope |
+| 6 | Lacuna fora de **todos** os domínios universais e suportes necessários (opção B) | `PROVEN_COMPLETE`; lacuna em ponto da grade universal ou dentro de suporte requerido segue `UNPROVEN` |
 | 7 | `required_families` vazio | erro de input — uma prova sobre nada não é prova |
 | 8 | Entrada com `identity_assertion` | ignorada ou erro; nunca aceita como evidência |
 | 9 | Mesma entrada, duas execuções | saída idêntica |
 | 10 | Captura real do rollout de 05/11 | a definir conforme a policy escolhida |
 
-O caso 6 só existe sob a opção B e é o que a distingue de A na prática.
+O caso 6 distingue B de A: a lacuna precisa estar fora de **todos** os domínios e suportes exigidos, não apenas fora do timestamp do máximo. Acrescentar RED que falhe para: omissão em ponto não-max da grade universal; suporte histórico de rate incompleto apesar de O(T)=V(T); prova escalar estreitada apenas ao degrau HIGH.
 
 ---
 
 ## 9. Checklist do gate
 
-- [ ] Seção 5 decidida por Flavio
+- [x] Seção 5 decidida por Flavio — opção B, com união conservadora para o portão escalar
 - [ ] Plano de teste completado conforme a decisão
 - [ ] Nenhum seletor, regex ou declaração do chamador entre as entradas
 - [ ] Ausência de evidência nunca produz `PROVEN_COMPLETE`
