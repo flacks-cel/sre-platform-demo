@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from typing import Any
 
@@ -9,7 +10,10 @@ from praeva.risk.cpu_limit_insufficiency import evaluate_cpu_limit_insufficiency
 from praeva.verify.cpu_evidence import build_report
 from praeva.verify.prometheus_adapter import QueryRange, collect_normalized_evidence
 
-SCHEMA_VERSION = "PRAEVA-ANALYZE-001"
+# ANALYZE-ERGONOMICS-001 §6.2: adding `invocation` is a wire format change.
+# This is the schema version of the composed document, not a rename of the
+# implementation slice. PRAEVA-ANALYZE-001 remains the historical version.
+SCHEMA_VERSION = "PRAEVA-ANALYZE-002"
 CALLER_ASSERTED = "CALLER_ASSERTED"
 
 RuleEvaluator = Callable[[dict[str, Any], dict[str, str]], dict[str, Any]]
@@ -69,6 +73,43 @@ def _select_rule(rule_id: str) -> RuleEvaluator:
         raise AnalyzeInputError(f"unknown rule: {rule_id}") from exc
 
 
+def _manifest_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _build_invocation(
+    *,
+    current_manifest: str,
+    proposed_manifest: str,
+    start: Any,
+    end: Any,
+    step: Any,
+    invocation: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Publish the invocation block. ANALYZE-ERGONOMICS-001 §6.
+
+    The orchestrator is the single producer of the canonical document, so a
+    programmatic call and a CLI call emit the same shape. The CLI only
+    resolves; it never adds fields of its own.
+    """
+
+    base: dict[str, Any] = {
+        "time_source": "EXPLICIT",
+        "start": start,
+        "end": end,
+        "step": step,
+        "current_manifest_sha256": _manifest_sha256(current_manifest),
+        "proposed_manifest_sha256": _manifest_sha256(proposed_manifest),
+    }
+
+    if invocation:
+        if not isinstance(invocation, dict):
+            raise AnalyzeInputError("invocation must be an object")
+        base.update(invocation)
+
+    return base
+
+
 def analyze(
     *,
     current_manifest: str,
@@ -89,6 +130,7 @@ def analyze(
     rule_id: str,
     rule_params: dict[str, str],
     query_range: QueryRange | None,
+    invocation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run Change Input -> Verify -> Change Join -> selected risk rule."""
 
@@ -136,6 +178,14 @@ def analyze(
 
     return {
         "schema_version": SCHEMA_VERSION,
+        "invocation": _build_invocation(
+            current_manifest=current_manifest,
+            proposed_manifest=proposed_manifest,
+            start=start,
+            end=end,
+            step=step,
+            invocation=invocation,
+        ),
         "result": risk,
         "unknown_reasons": risk.get("unknown_reasons", []),
         "evidence_refs": risk.get("evidence_refs", []),

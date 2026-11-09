@@ -169,7 +169,7 @@ def _cli_args(current: Path, proposed: Path) -> list[str]:
 def test_happy_path_composes_all_four_layers() -> None:
     result = _analyze()(**_kwargs())
 
-    assert result["schema_version"] == "PRAEVA-ANALYZE-001"
+    assert result["schema_version"] == "PRAEVA-ANALYZE-002"
     assert result["result"]["risk_level"] == "CRITICAL"
     assert set(result["layers"]) == {"change_input", "verify", "change_join", "risk"}
     assert result["layers"]["risk"] == result["result"]
