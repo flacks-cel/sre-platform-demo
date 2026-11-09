@@ -321,9 +321,33 @@ C: short=300m, long=500m
 => CRITICAL / sustained_window_contradiction
 ```
 
-Portanto, a versão atual pode subestimar `CRITICAL` como `HIGH` quando `joined.pods` é uma população incompleta do Deployment. Isso é uma limitação conhecida da integração atual, não uma mudança da escada `CHANGE-RISK-001`: `CRITICAL` continua existencial, enquanto emitir `HIGH` com segurança exige excluir contradição long na população relevante completa.
+Portanto, a versão original podia subestimar `CRITICAL` como `HIGH` quando `joined.pods` é uma população incompleta do Deployment. `CRITICAL` continua existencial, enquanto emitir `HIGH` com segurança exige excluir contradição long na população relevante completa.
 
-Até existir uma prova de atribuição/completude populacional integrada antes desta regra, um resultado `HIGH` depende implicitamente da suposição de que `joined.pods` representa toda a população relevante. O SPIKE-003 está investigando a camada que deve tornar essa precondição explícita.
+#### Resolvido por CHANGE-RISK-001-POPULATION-GATE-001
+
+Esta limitação **deixou de ser explorável**. O portão de população, pré-registrado em
+`CHANGE-RISK-001-POPULATION-GATE-001.md` e aplicado como função pura depois da escada,
+bloqueia os degraus de forma universal quando não há prova de completude:
+
+| Degrau | Forma | Sem prova de população |
+|---|---|---|
+| `CRITICAL` | `∃` | preservado |
+| `HIGH` | `∃` ∧ `∀` | `UNKNOWN(population_completeness_unproven)` |
+| `MEDIUM` / `LOW` | `∀` | `UNKNOWN(population_completeness_unproven)` |
+| `NOT_APPLICABLE` | — | preservado |
+
+A prova é lida de `identity_assertion.population_completeness`, com o valor positivo exato
+`PROVEN_COMPLETE`. Ausência, `null` ou qualquer outro valor significam **não provada**
+(fail-closed). O campo **não** é `workload_to_pod_selector_relation`, que provaria
+pertencimento e nunca completude.
+
+A escada, os limiares e a margem não foram alterados. O cenário S9 foi promovido a regressão
+obrigatória no `testpaths`.
+
+**Consequência em aberto:** nenhum produtor preenche o campo hoje, logo a regra emite na prática
+apenas `CRITICAL`, `UNKNOWN` ou `NOT_APPLICABLE`. Recuperar `HIGH`, `MEDIUM` e `LOW` em execuções
+reais depende de ligar uma prova verificável de população — trabalho da camada de attribution,
+fora do escopo daquele slice.
 
 ### 8.5 Antes de MEDIUM/LOW, CPU precisa ser completa
 

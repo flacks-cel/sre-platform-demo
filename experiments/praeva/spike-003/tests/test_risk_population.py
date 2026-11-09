@@ -81,6 +81,20 @@ def _joined(fixture: dict[str, Any], population: list[str]) -> dict[str, Any]:
 
 
 def test_s9_incomplete_population_can_misclassify_high_when_complete_is_critical() -> None:
+    """S9 after CHANGE-RISK-001-POPULATION-GATE-001.
+
+    Historical result, recorded on 2026-10-26 and the reason this gate
+    exists: the observed subset {A,B} was CLASSIFIED/HIGH with
+    classification_basis short_window_only_contradiction, while the
+    complete population {A,B,C} was CRITICAL. The subset understated the
+    hazard in the expensive direction.
+
+    The subset fixture is NOT marked PROVEN_COMPLETE to keep this test
+    green: doing so would fabricate exactly the proof the gate demands.
+    The subset now resolves to UNKNOWN, and the complete population still
+    reaches CRITICAL because that rung is existential.
+    """
+
     fixture = _load_fixture()
 
     observed = evaluate_cpu_limit_insufficiency(
@@ -92,9 +106,11 @@ def test_s9_incomplete_population_can_misclassify_high_when_complete_is_critical
         margin=fixture["margin"],
     )
 
-    assert observed["classification_status"] == "CLASSIFIED"
-    assert observed["risk_level"] == "HIGH"
-    assert observed["classification_basis"] == "short_window_only_contradiction"
+    assert observed["classification_status"] == "UNKNOWN"
+    assert "risk_level" not in observed
+    assert [entry["code"] for entry in observed["unknown_reasons"]] == [
+        "population_completeness_unproven"
+    ]
 
     assert complete["classification_status"] == "CLASSIFIED"
     assert complete["risk_level"] == "CRITICAL"

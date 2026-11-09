@@ -120,9 +120,16 @@ def test_live_prometheus_replay_matches_captured_wire_byte_for_byte(
 
     payload = json.loads(first)
     assert payload["result"]["classification_status"] == "UNKNOWN"
+    # CHANGE-RISK-001-POPULATION-GATE-001: the gate adds a second,
+    # independent reason. The verdict is unchanged (still UNKNOWN); the two
+    # blockers have different remedies, so both are reported.
     assert payload["result"]["unknown_reasons"] == [
         {
             "code": "censored_evidence",
             "precondition": "uncensored_evidence_for_noncontradiction",
-        }
+        },
+        {
+            "code": "population_completeness_unproven",
+            "precondition": "proven_complete_target_population",
+        },
     ]
