@@ -1,7 +1,7 @@
 # CHANGE-RISK-001-POPULATION-GATE-001 — Contrato de Pré-Registração
 ## Bloqueio dos níveis que dependem de população completa
 
-> Status: **pré-registração — em preenchimento.**
+> Status: **pré-registração — seção 8 fechada antes de RED.**
 > Gate: **nenhuma linha implementada antes da seção 8 resolvida e commitada.**
 > Base: `main @ ac5607e`. Altera **apenas** `praeva/risk/cpu_limit_insufficiency.py`.
 > Emenda deliberada de semântica da CHANGE-RISK-001 — não é correção de bug disfarçada.
@@ -56,8 +56,13 @@ joined["identity_assertion"]["population_completeness"]
 | ausente, `null`, ou qualquer outro valor | **não provada** |
 
 **Nada no Join muda neste slice.** O campo não existe hoje, e ausência é tratada como não provada —
-que é a verdade do estado atual. Quando a camada de attribution puder provar completude, ela
-preenche o campo e o portão abre sozinho, sem nova alteração nesta regra.
+que é a verdade do estado atual. Uma futura integração de attribution poderá preencher
+este campo **somente por um produtor de prova confiável e auditável**, definido em contrato
+separado. A regra pura recebe o campo como input; a mera string `PROVEN_COMPLETE`
+não constitui evidência de origem por si só, e este slice **não** autoriza flag CLI,
+`CALLER_ASSERTED` nem uma inferência de `VERIFIED` como substituto. A ligação efetiva
+do produtor ao `joined` será trabalho futuro e pode demandar adaptar o wiring/Join em
+outro slice; ela não ocorre automaticamente aqui.
 
 Tratar ausência como prova seria o oposto da ADR-005.
 
@@ -94,6 +99,12 @@ as duas razões aparecem: são bloqueios independentes, com remédios diferentes
 throttling versus provar a população.
 
 Substituir uma pela outra esconderia metade do trabalho que o usuário precisa fazer.
+
+Razões preexistentes permanecem em sua ordem e a razão populacional é acrescentada
+**uma única vez ao final**. Uma conversão de `CLASSIFIED` para `UNKNOWN` retira
+`risk_level` e `classification_basis`, mantém os `evidence_refs`, `policy`
+e `provenance` preexistentes, e valida o resultado com
+`validate_risk_result`. O portão não sintetiza referências a uma prova que não existe.
 
 ### 4.2 Nenhuma alteração na escada
 
@@ -132,6 +143,17 @@ teste justamente enquanto o produto não consegue alcançá-la.
 
 Os testes novos cobrem o portão em si, com a prova ausente.
 
+**Exceção obrigatória: regressão histórica do S9.** O teste
+`experiments/praeva/spike-003/tests/test_risk_population.py`
+não é um teste ordinário do degrau `HIGH`: ele materializa a omissão de `pod-c`.
+**Nunca** atribuir `PROVEN_COMPLETE` ao subconjunto `{pod-a,pod-b}` para
+preservar artificialmente a expectativa antiga `HIGH`. A nova expectativa contra
+a regra corrigida é `UNKNOWN(population_completeness_unproven)` para o subconjunto;
+para a população `{pod-a,pod-b,pod-c}`, `CRITICAL` continua demonstrável.
+O resultado **pré-gate** `HIGH` fica registrado como achado histórico do SPIKE-003,
+não como comportamento ainda aceito. Não modificar a fixture bruta/sintética para
+esconder a regressão corrigida.
+
 ---
 
 ## 7. Opção considerada e rejeitada
@@ -148,25 +170,48 @@ documento e justificativa escrita de por que o risco é aceitável.
 
 ---
 
-## 8. Lacunas a resolver antes do gate
+## 8. Decisões fechadas antes de RED
 
-### 8.1 Nome e forma do campo
+### 8.1 Nome e forma do campo — fechado
 
-`identity_assertion.population_completeness` com enum `PROVEN_COMPLETE`, ou um bloco próprio
-`population` com mais estrutura, antecipando o que a attribution vai publicar.
+Usar campo simples `identity_assertion.population_completeness` com valor positivo
+exato `PROVEN_COMPLETE`. Ausente, `null`, string desconhecida, outro tipo ou
+qualquer outro valor = **não provada** (fail-closed, sem erro de input). Nenhum
+bloco `population` novo é antecipado neste slice. O contrato do produtor
+de prova e seu wiring futuro ficam fora do escopo.
 
-- [ ] Campo simples agora; estrutura quando a attribution definir a sua
-- [ ] Bloco próprio desde já, acordado com o contrato de attribution
+Não confundir este campo com `workload_to_pod_selector_relation`, que prova
+pertencimento, não completude. Um `CRITICAL` continua condicionado às
+pré-condições preexistentes do witness e da identidade declarada; este
+gate **não resolve atribuição falsa** ou verifica identidade.
 
-### 8.2 Código da razão
+### 8.2 Razão e precondição — fechado
 
-- [ ] `population_completeness_unproven` (recomendado — diz o que falta, não o que está errado)
-- [ ] Outro: `[ preencher ]`
+Quando a população não está provada e o gate bloqueia níveis, usar:
 
-### 8.3 Onde o portão mora no código
+```text
+code = population_completeness_unproven
+precondition = proven_complete_target_population
+```
 
-- [ ] Dentro de `evaluate_cpu_limit_insufficiency`, após a escada
-- [ ] Função separada no mesmo módulo, aplicada ao resultado da escada
+Razões já existentes permanecem e esta é acrescentada ao fim, apenas uma vez.
+
+### 8.3 Local do portão — fechado
+
+Implementar função pura separada **no mesmo**
+`praeva/risk/cpu_limit_insufficiency.py`, aplicada a um único resultado
+da escada, mantendo a API pública
+`evaluate_cpu_limit_insufficiency(*, joined, margin)`.
+A escada atual contém retornos antecipados: refatorar apenas a fronteira
+entre avaliação do candidato e pós-processamento, sem alterar os limiares
+nem a ordem normativa das decisões.
+
+O gate deve preservar `CRITICAL` e `NOT_APPLICABLE`; bloquear `HIGH`,
+`MEDIUM` e `LOW` não provados; acumular a razão em `UNKNOWN` não provado;
+preservar evidência e provenance existentes; validar o resultado
+`CLASSIFIED/UNKNOWN` após o pós-processamento.
+O teste do S9 histórico é exceção explícita à migração automática
+das fixtures de `HIGH` (seção 6).
 
 ---
 
@@ -186,11 +231,10 @@ documento e justificativa escrita de por que o risco é aceitável.
 | 10 | `population_completeness` ausente do `joined` | tratado como não provada, sem erro |
 | 11 | `population_completeness` com valor desconhecido | tratado como não provada, sem erro |
 | 12 | `LIMIT_REMOVED` | `NOT_APPLICABLE` — o portão não se aplica |
-| 13 | Cenário S9 do SPIKE-003, população não provada | `UNKNOWN`, **nunca** `HIGH` |
-| 14 | Cenário S9, população provada sobre `{A,B,C}` | `CRITICAL` |
+| 13 | Cenário S9, subconjunto observado `{A,B}` sem prova | `UNKNOWN(population_completeness_unproven)`, **nunca** `HIGH` |
+| 14 | Cenário S9, população `{A,B,C}` com prova simulada na fixture | `CRITICAL`; nenhuma prova de completude é inferida a partir do subconjunto |
 
-O par 13/14 é o que fecha o S9: a mesma evidência, com e sem prova, e em nenhum dos dois casos a
-resposta é `HIGH`.
+O par 13/14 compartilha a mesma **fixture-base sintética**, mas NÃO a mesma população observada: no 13 usa `{A,B}`, no 14 usa `{A,B,C}`. A correção bloqueia `HIGH` no subconjunto sem prova; a população completa contém witness long de `CRITICAL`.
 
 Os casos 10 e 11 travam a interpretação de ausência: um campo que falta nunca vira prova.
 
@@ -198,11 +242,12 @@ Os casos 10 e 11 travam a interpretação de ausência: um campo que falta nunca
 
 ## 10. Checklist do gate
 
-- [ ] Seção 8 resolvida e commitada
+- [x] Seção 8 resolvida e commitada antes de RED
 - [ ] Nenhuma alteração em Attribution, Join, Verify, Analyze ou Ownership
 - [ ] Nenhum limiar, margem ou degrau da escada alterado
 - [ ] Ausência de prova nunca tratada como prova
 - [ ] `workload_to_pod_selector_relation` **não** usado como prova de população
-- [ ] Testes existentes de `HIGH`/`MEDIUM`/`LOW` migrados fornecendo a prova, não trocando a expectativa
+- [ ] Testes ordinários de `HIGH`/`MEDIUM`/`LOW` migrados fornecendo a prova, sem trocar a expectativa
+- [ ] Regressão S9 histórica migra para `UNKNOWN` no subconjunto **sem jamais inventar prova**
 - [ ] Testes do plano 9 escritos e **falhando** antes da primeira linha de implementação
 - [ ] Limitação conhecida do S9 no contrato da CHANGE-RISK-001 atualizada para apontar este slice
