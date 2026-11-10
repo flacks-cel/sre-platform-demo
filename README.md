@@ -346,6 +346,16 @@ This project showcases practical experience with:
 
 ---
 
+# 🔍 PRAEVA — Preventive Change Analysis
+
+PRAEVA is a separate product being developed and validated within this SRE laboratory. It evaluates proposed Kubernetes resource changes against verifiable historical evidence; it does **not** deploy changes or guarantee safety.
+
+The current CLI is Python-based. Cross-platform executables, installers and user documentation are **planned, not yet released**.
+
+See the [PRAEVA product vision and v0.1 distribution roadmap](docs/praeva-product-roadmap.md) for scope, release gates, supported-platform targets and manual plan.
+
+---
+
 # 👨‍💻 About the Author
 
 ## Flavio Lacks
